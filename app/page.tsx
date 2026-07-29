@@ -54,9 +54,10 @@ export default function Dashboard() {
   const [aba, setAba] = useState<'financas' | 'faculdade' | 'agenda'>('financas');
   const [loading, setLoading] = useState(true);
 
-  // Filtros
+  // Filtros Finanças (Incluindo Período!)
   const [filtroQuem, setFiltroQuem] = useState('Todos');
   const [filtroCartao, setFiltroCartao] = useState('Todos');
+  const [filtroPeriodo, setFiltroPeriodo] = useState('Todos');
   const [alunoFaculdade, setAlunoFaculdade] = useState<'Chamone' | 'Letícia'>('Chamone');
 
   // Modais
@@ -241,13 +242,35 @@ export default function Dashboard() {
     if (confirm('Apagar evento?')) { await supabase.from('agenda').delete().eq('id', id); carregarDados(); }
   }
 
-  // --- CÁLCULOS FINANCEIROS ---
+  // --- FILTRAGEM INTELIGENTE (PESSOA + CARTÃO + PERÍODO) ---
   const financasFiltradas = financas.filter(f => {
     const passQuem = filtroQuem === 'Todos' || f.quem === filtroQuem;
     const passCartao = filtroCartao === 'Todos' || f.cartao === filtroCartao;
-    return passQuem && passCartao;
+    
+    let passPeriodo = true;
+    if (filtroPeriodo !== 'Todos' && f.data) {
+      const dataGasto = new Date(f.data + 'T12:00:00');
+      const hoje = new Date();
+      
+      if (filtroPeriodo === 'MesAtual') {
+        passPeriodo = dataGasto.getMonth() === hoje.getMonth() && dataGasto.getFullYear() === hoje.getFullYear();
+      } else if (filtroPeriodo === 'MesAnterior') {
+        const mesPassado = new Date();
+        mesPassado.setMonth(hoje.getMonth() - 1);
+        passPeriodo = dataGasto.getMonth() === mesPassado.getMonth() && dataGasto.getFullYear() === mesPassado.getFullYear();
+      } else if (filtroPeriodo === 'Trimestre') {
+        const tresMesesAtras = new Date();
+        tresMesesAtras.setMonth(hoje.getMonth() - 3);
+        passPeriodo = dataGasto >= tresMesesAtras && dataGasto <= hoje;
+      } else if (filtroPeriodo === 'Ano') {
+        passPeriodo = dataGasto.getFullYear() === hoje.getFullYear();
+      }
+    }
+
+    return passQuem && passCartao && passPeriodo;
   });
 
+  // --- CÁLCULOS FINANCEIROS ---
   const receitas = financasFiltradas.filter(f => f.tipo === 'receita').reduce((acc, cur) => acc + Number(cur.valor), 0);
   const despesas = financasFiltradas.filter(f => f.tipo === 'despesa').reduce((acc, cur) => acc + Number(cur.valor), 0);
   const saldo = receitas - despesas;
@@ -272,9 +295,9 @@ export default function Dashboard() {
   }, []);
 
   const gastosPorPessoa = [
-    { name: 'Chamone', valor: financas.filter(f => f.tipo === 'despesa' && f.quem === 'Chamone').reduce((a, c) => a + Number(c.valor), 0), fill: '#3B82F6' },
-    { name: 'Letícia', valor: financas.filter(f => f.tipo === 'despesa' && f.quem === 'Letícia').reduce((a, c) => a + Number(c.valor), 0), fill: '#D946EF' },
-    { name: 'Ambos (Casa)', valor: financas.filter(f => f.tipo === 'despesa' && f.quem === 'Ambos').reduce((a, c) => a + Number(c.valor), 0), fill: '#8B5CF6' }
+    { name: 'Chamone', valor: financasFiltradas.filter(f => f.tipo === 'despesa' && f.quem === 'Chamone').reduce((a, c) => a + Number(c.valor), 0), fill: '#3B82F6' },
+    { name: 'Letícia', valor: financasFiltradas.filter(f => f.tipo === 'despesa' && f.quem === 'Letícia').reduce((a, c) => a + Number(c.valor), 0), fill: '#D946EF' },
+    { name: 'Ambos (Casa)', valor: financasFiltradas.filter(f => f.tipo === 'despesa' && f.quem === 'Ambos').reduce((a, c) => a + Number(c.valor), 0), fill: '#8B5CF6' }
   ];
 
   // --- CÁLCULOS ACADÊMICOS INDIVIDUAIS ---
@@ -396,17 +419,19 @@ export default function Dashboard() {
           {/* ========================================== */}
           {aba === 'financas' && (
             <div className="space-y-6 animate-fadeIn">
-              {/* FILTROS */}
+              {/* FILTROS COM SELETOR DE PERÍODO */}
               <div className="flex flex-wrap items-center justify-between gap-4 bg-[#111726] p-4 rounded-2xl border border-slate-800/60">
                 <div className="flex flex-wrap items-center gap-4">
+                  
+                  {/* FILTRO POR PESSOA */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-400">Pessoa:</span>
                     <div className="flex gap-1 bg-[#0b0f19] p-1 rounded-lg border border-slate-800">
                       {[
-                        { id: 'Todos', label: 'Todos (Geral)' },
+                        { id: 'Todos', label: 'Todos' },
                         { id: 'Chamone', label: 'Chamone' },
                         { id: 'Letícia', label: 'Letícia' },
-                        { id: 'Ambos', label: 'Ambos (Casal)' }
+                        { id: 'Ambos', label: 'Ambos' }
                       ].map((q) => (
                         <button key={q.id} onClick={() => setFiltroQuem(q.id)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${filtroQuem === q.id ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-500 hover:text-slate-300'}`}>
                           {q.label}
@@ -415,6 +440,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
+                  {/* FILTRO POR CONTA/CARTÃO */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-400">Conta:</span>
                     <select value={filtroCartao} onChange={e => setFiltroCartao(e.target.value)} className="bg-[#0b0f19] border border-slate-800 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-200 focus:outline-none focus:border-emerald-500">
@@ -426,6 +452,23 @@ export default function Dashboard() {
                       <option value="Débito / Pix">Débito / Pix</option>
                     </select>
                   </div>
+
+                  {/* FILTRO POR PERÍODO */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-400">Período:</span>
+                    <select 
+                      value={filtroPeriodo} 
+                      onChange={e => setFiltroPeriodo(e.target.value)} 
+                      className="bg-[#0b0f19] border border-slate-800 rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-400 focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="Todos">Todo o Período</option>
+                      <option value="MesAtual">Mês Atual</option>
+                      <option value="MesAnterior">Mês Anterior</option>
+                      <option value="Trimestre">Últimos 3 Meses</option>
+                      <option value="Ano">Ano Atual</option>
+                    </select>
+                  </div>
+
                 </div>
 
                 <button onClick={exportarParaExcel} className="flex items-center gap-2 bg-[#0b0f19] hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-400 border border-slate-800 hover:border-emerald-500/30 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-sm">
