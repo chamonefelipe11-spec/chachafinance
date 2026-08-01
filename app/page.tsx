@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import { 
   Wallet, GraduationCap, ArrowUpRight, ArrowDownRight, AlertTriangle, 
-  CheckCircle, Plus, Trash2, TrendingUp, BookOpen, Calculator, X, 
+  CheckCircle, Plus, Trash2, Pencil, TrendingUp, BookOpen, Calculator, X, 
   Award, Users, CreditCard, LogOut, Lock, Download, FileSpreadsheet, 
   UserPlus, Calendar, CheckSquare, Square, Clock, Bell
 } from 'lucide-react';
@@ -77,13 +77,17 @@ export default function Dashboard() {
   const [parceladoFin, setParceladoFin] = useState(false);
   const [totalParcelasFin, setTotalParcelasFin] = useState('1');
 
-  // Formulário Faculdade
+  // Formulário Faculdade (Com Edição)
+  const [idEditandoDisc, setIdEditandoDisc] = useState<string | null>(null);
   const [nomeDisc, setNomeDisc] = useState('');
-  const [semestreDisc, setSemestreDisc] = useState('2026.1');
+  const [semestreDisc, setSemestreDisc] = useState('2026.2');
+  const [qtdProvasDisc, setQtdProvasDisc] = useState('2');
   const [p1Disc, setP1Disc] = useState('');
   const [pesoP1Disc, setPesoP1Disc] = useState('1');
   const [p2Disc, setP2Disc] = useState('');
   const [pesoP2Disc, setPesoP2Disc] = useState('1');
+  const [p3Disc, setP3Disc] = useState('');
+  const [pesoP3Disc, setPesoP3Disc] = useState('1');
   const [faltasDisc, setFaltasDisc] = useState('0');
   const [maxFaltasDisc, setMaxFaltasDisc] = useState('16');
 
@@ -161,11 +165,15 @@ export default function Dashboard() {
 
     if (disciplinas.length > 0) {
       const dadosDisc = disciplinas.map(d => {
-        const media = ((Number(d.nota_p1 || 0) * Number(d.peso_p1 || 1)) + (Number(d.nota_p2 || 0) * Number(d.peso_p2 || 1))) / (Number(d.peso_p1 || 1) + Number(d.peso_p2 || 1));
+        let somaNotas = (Number(d.nota_p1 || 0) * Number(d.peso_p1 || 1));
+        let somaPesos = Number(d.peso_p1 || 1);
+        if (d.qtd_provas >= 2) { somaNotas += (Number(d.nota_p2 || 0) * Number(d.peso_p2 || 1)); somaPesos += Number(d.peso_p2 || 1); }
+        if (d.qtd_provas >= 3) { somaNotas += (Number(d.nota_p3 || 0) * Number(d.peso_p3 || 1)); somaPesos += Number(d.peso_p3 || 1); }
+        const media = somaNotas / (somaPesos || 1);
+
         return {
-          'Aluno': d.aluno || 'Chamone', 'Disciplina': d.nome, 'Semestre': d.semestre,
-          'P1': Number(d.nota_p1 || 0), 'Peso P1': Number(d.peso_p1 || 1),
-          'P2': Number(d.nota_p2 || 0), 'Peso P2': Number(d.peso_p2 || 1),
+          'Aluno': d.aluno || 'Chamone', 'Disciplina': d.nome, 'Semestre': d.semestre, 'Qtd Provas': d.qtd_provas || 2,
+          'P1': Number(d.nota_p1 || 0), 'P2': d.qtd_provas >= 2 ? Number(d.nota_p2 || 0) : '-', 'P3': d.qtd_provas >= 3 ? Number(d.nota_p3 || 0) : '-',
           'Média': Number(media.toFixed(1)), 'Faltas': Number(d.faltas || 0), 'Max Faltas': Number(d.max_faltas || 16),
           'Status': d.faltas > d.max_faltas ? 'Reprovado Faltas' : media < 40 ? 'Reprovado Nota' : media < 60 ? 'Exame Especial' : 'Aprovado'
         };
@@ -192,7 +200,7 @@ export default function Dashboard() {
       transacoesParaSalvar.push({
         descricao: descFinal, valor: parseFloat(valorFin), tipo: tipoFin, categoria: catFin,
         data: dataParcela.toISOString().split('T')[0], quem: quemFin, cartao: cartaoFin,
-        parcela_atual: i, total_parcelas: numParcelas, tipo_gasto: tipoGastoFin
+        parcela_atual: i, total_parcelas: numParcelas, tipo_gasto: tipoFin === 'receita' ? 'Receita' : tipoGastoFin
       });
     }
     await supabase.from('financas').insert(transacoesParaSalvar);
@@ -205,21 +213,61 @@ export default function Dashboard() {
   }
 
   // --- CRUD FACULDADE ---
+  function abrirNovaDisciplina() {
+    setIdEditandoDisc(null);
+    setNomeDisc(''); setSemestreDisc('2026.2'); setQtdProvasDisc('2');
+    setP1Disc(''); setPesoP1Disc('1'); setP2Disc(''); setPesoP2Disc('1'); setP3Disc(''); setPesoP3Disc('1');
+    setFaltasDisc('0'); setMaxFaltasDisc('16');
+    setModalDisc(true);
+  }
+
+  function abrirEdicaoDisciplina(d: any) {
+    setIdEditandoDisc(d.id);
+    setNomeDisc(d.nome);
+    setSemestreDisc(d.semestre);
+    setQtdProvasDisc(d.qtd_provas ? String(d.qtd_provas) : '2');
+    setP1Disc(d.nota_p1 !== null ? String(d.nota_p1) : '');
+    setPesoP1Disc(d.peso_p1 ? String(d.peso_p1) : '1');
+    setP2Disc(d.nota_p2 !== null ? String(d.nota_p2) : '');
+    setPesoP2Disc(d.peso_p2 ? String(d.peso_p2) : '1');
+    setP3Disc(d.nota_p3 !== null ? String(d.nota_p3) : '');
+    setPesoP3Disc(d.peso_p3 ? String(d.peso_p3) : '1');
+    setFaltasDisc(String(d.faltas || 0));
+    setMaxFaltasDisc(String(d.max_faltas || 16));
+    setModalDisc(true);
+  }
+
   async function salvarDisciplina(e: React.FormEvent) {
     e.preventDefault();
     if (!nomeDisc) return alert('Digite o nome da disciplina!');
-    await supabase.from('disciplinas').insert([{
-      nome: nomeDisc, semestre: semestreDisc, nota_p1: p1Disc ? parseFloat(p1Disc) : 0,
-      peso_p1: parseFloat(pesoP1Disc) || 1, nota_p2: p2Disc ? parseFloat(p2Disc) : 0,
-      peso_p2: parseFloat(pesoP2Disc) || 1, faltas: parseInt(faltasDisc) || 0,
-      max_faltas: parseInt(maxFaltasDisc) || 16, aluno: alunoFaculdade
-    }]);
-    setModalDisc(false); setNomeDisc(''); setP1Disc(''); setP2Disc('');
+
+    const payload = {
+      nome: nomeDisc,
+      semestre: semestreDisc,
+      aluno: alunoFaculdade,
+      qtd_provas: parseInt(qtdProvasDisc) || 2,
+      nota_p1: parseFloat(p1Disc) || 0,
+      peso_p1: parseFloat(pesoP1Disc) || 1,
+      nota_p2: parseFloat(p2Disc) || 0,
+      peso_p2: parseFloat(pesoP2Disc) || 1,
+      nota_p3: parseFloat(p3Disc) || 0,
+      peso_p3: parseFloat(pesoP3Disc) || 1,
+      faltas: parseInt(faltasDisc) || 0,
+      max_faltas: parseInt(maxFaltasDisc) || 16
+    };
+
+    if (idEditandoDisc) {
+      await supabase.from('disciplinas').update(payload).eq('id', idEditandoDisc);
+    } else {
+      await supabase.from('disciplinas').insert([payload]);
+    }
+    
+    setModalDisc(false);
     carregarDados();
   }
 
   async function removerDisciplina(id: string) {
-    if (confirm('Apagar disciplina?')) { await supabase.from('disciplinas').delete().eq('id', id); carregarDados(); }
+    if (confirm('Apagar disciplina permanentemente?')) { await supabase.from('disciplinas').delete().eq('id', id); carregarDados(); }
   }
 
   // --- CRUD AGENDA ---
@@ -303,15 +351,23 @@ export default function Dashboard() {
   // --- CÁLCULOS ACADÊMICOS INDIVIDUAIS ---
   const disciplinasFiltradas = disciplinas.filter(d => (d.aluno || 'Chamone') === alunoFaculdade);
   const totalDisciplinas = disciplinasFiltradas.length;
+  
   const mediaGeralCR = totalDisciplinas > 0 
     ? (disciplinasFiltradas.reduce((acc, d) => {
-        const m = ((Number(d.nota_p1 || 0) * Number(d.peso_p1 || 1)) + (Number(d.nota_p2 || 0) * Number(d.peso_p2 || 1))) / (Number(d.peso_p1 || 1) + Number(d.peso_p2 || 1));
-        return acc + m;
+        let somaNotas = (Number(d.nota_p1 || 0) * Number(d.peso_p1 || 1));
+        let somaPesos = Number(d.peso_p1 || 1);
+        if (d.qtd_provas >= 2) { somaNotas += (Number(d.nota_p2 || 0) * Number(d.peso_p2 || 1)); somaPesos += Number(d.peso_p2 || 1); }
+        if (d.qtd_provas >= 3) { somaNotas += (Number(d.nota_p3 || 0) * Number(d.peso_p3 || 1)); somaPesos += Number(d.peso_p3 || 1); }
+        return acc + (somaNotas / (somaPesos || 1));
       }, 0) / totalDisciplinas).toFixed(1)
     : '0.0';
 
   const disciplinasAprovadas = disciplinasFiltradas.filter(d => {
-    const m = ((Number(d.nota_p1 || 0) * Number(d.peso_p1 || 1)) + (Number(d.nota_p2 || 0) * Number(d.peso_p2 || 1))) / (Number(d.peso_p1 || 1) + Number(d.peso_p2 || 1));
+    let somaNotas = (Number(d.nota_p1 || 0) * Number(d.peso_p1 || 1));
+    let somaPesos = Number(d.peso_p1 || 1);
+    if (d.qtd_provas >= 2) { somaNotas += (Number(d.nota_p2 || 0) * Number(d.peso_p2 || 1)); somaPesos += Number(d.peso_p2 || 1); }
+    if (d.qtd_provas >= 3) { somaNotas += (Number(d.nota_p3 || 0) * Number(d.peso_p3 || 1)); somaPesos += Number(d.peso_p3 || 1); }
+    const m = somaNotas / (somaPesos || 1);
     return m >= 60 && d.faltas <= d.max_faltas;
   }).length;
 
@@ -391,7 +447,7 @@ export default function Dashboard() {
             <button 
               onClick={() => {
                 if (aba === 'financas') setModalFin(true);
-                else if (aba === 'faculdade') setModalDisc(true);
+                else if (aba === 'faculdade') abrirNovaDisciplina();
                 else setModalAgenda(true);
               }}
               className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl transition-all cursor-pointer text-xs md:text-sm shadow-md"
@@ -423,14 +479,15 @@ export default function Dashboard() {
               <div className="flex flex-wrap items-center justify-between gap-4 bg-[#111726] p-4 rounded-2xl border border-slate-800/60">
                 <div className="flex flex-wrap items-center gap-4">
                   
+                  {/* FILTRO POR PESSOA */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-400">Pessoa:</span>
                     <div className="flex gap-1 bg-[#0b0f19] p-1 rounded-lg border border-slate-800">
                       {[
-                        { id: 'Todos', label: 'Todos (Geral)' },
+                        { id: 'Todos', label: 'Todos' },
                         { id: 'Chamone', label: 'Chamone' },
                         { id: 'Letícia', label: 'Letícia' },
-                        { id: 'Ambos', label: 'Ambos (Casal)' }
+                        { id: 'Ambos', label: 'Ambos' }
                       ].map((q) => (
                         <button key={q.id} onClick={() => setFiltroQuem(q.id)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${filtroQuem === q.id ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-500 hover:text-slate-300'}`}>
                           {q.label}
@@ -439,6 +496,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
+                  {/* FILTRO POR CONTA/CARTÃO */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-400">Conta:</span>
                     <select value={filtroCartao} onChange={e => setFiltroCartao(e.target.value)} className="bg-[#0b0f19] border border-slate-800 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-200 focus:outline-none focus:border-emerald-500">
@@ -451,6 +509,7 @@ export default function Dashboard() {
                     </select>
                   </div>
 
+                  {/* FILTRO POR PERÍODO */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-400">Período:</span>
                     <select 
@@ -680,13 +739,18 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* LISTA DE DISCIPLINAS */}
+              {/* LISTA DE DISCIPLINAS E EDIÇÃO */}
               <div className="bg-[#111726] border border-slate-800/60 p-6 rounded-xl">
                 <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-4">Disciplinas Cadastradas para {alunoFaculdade}</h3>
                 {disciplinasFiltradas.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {disciplinasFiltradas.map((d) => {
-                      const media = ((Number(d.nota_p1 || 0) * Number(d.peso_p1 || 1)) + (Number(d.nota_p2 || 0) * Number(d.peso_p2 || 1))) / (Number(d.peso_p1 || 1) + Number(d.peso_p2 || 1));
+                      let somaNotas = (Number(d.nota_p1 || 0) * Number(d.peso_p1 || 1));
+                      let somaPesos = Number(d.peso_p1 || 1);
+                      if (d.qtd_provas >= 2) { somaNotas += (Number(d.nota_p2 || 0) * Number(d.peso_p2 || 1)); somaPesos += Number(d.peso_p2 || 1); }
+                      if (d.qtd_provas >= 3) { somaNotas += (Number(d.nota_p3 || 0) * Number(d.peso_p3 || 1)); somaPesos += Number(d.peso_p3 || 1); }
+                      
+                      const media = somaNotas / (somaPesos || 1);
                       const riscoFaltas = d.faltas >= d.max_faltas * 0.75;
                       const reprovadoFalta = d.faltas > d.max_faltas;
                       
@@ -703,7 +767,10 @@ export default function Dashboard() {
                                 <h4 className="font-bold text-sm text-slate-200">{d.nome}</h4>
                                 <span className="text-[11px] text-slate-500 font-medium">{d.semestre}</span>
                               </div>
-                              <button onClick={() => removerDisciplina(d.id)} className="text-slate-500 hover:text-rose-400 transition-colors p-1 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              <div className="flex items-center">
+                                <button onClick={() => abrirEdicaoDisciplina(d)} className="text-slate-500 hover:text-cyan-400 transition-colors p-1 cursor-pointer"><Pencil className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => removerDisciplina(d.id)} className="text-slate-500 hover:text-rose-400 transition-colors p-1 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
                             </div>
                             <div className="mt-2.5 inline-block">
                               <span className={`text-[11px] px-2 py-0.5 rounded font-medium border ${statusBadge.cor}`}>{statusBadge.texto}</span>
@@ -712,11 +779,12 @@ export default function Dashboard() {
 
                           <div className="bg-[#111726] p-2.5 rounded-lg border border-slate-800/40 space-y-1.5">
                             <div className="flex justify-between text-[11px] text-slate-400">
-                              <span>P1 (Peso {d.peso_p1}): <strong className="text-slate-200">{d.nota_p1 || '0'}</strong></span>
-                              <span>P2 (Peso {d.peso_p2}): <strong className="text-slate-200">{d.nota_p2 || '0'}</strong></span>
+                              <span>P1: <strong className="text-slate-200">{d.nota_p1 || '0'}</strong></span>
+                              {d.qtd_provas >= 2 && <span>P2: <strong className="text-slate-200">{d.nota_p2 || '0'}</strong></span>}
+                              {d.qtd_provas >= 3 && <span>P3: <strong className="text-slate-200">{d.nota_p3 || '0'}</strong></span>}
                             </div>
                             <div className="flex justify-between items-center pt-1.5 border-t border-slate-800/60 text-xs">
-                              <span className="text-slate-400 font-medium">Média:</span>
+                              <span className="text-slate-400 font-medium">Média Final:</span>
                               <span className="font-bold text-sm text-slate-100">{media.toFixed(1)}</span>
                             </div>
                           </div>
@@ -790,7 +858,7 @@ export default function Dashboard() {
       )}
 
       {/* ========================================== */}
-      {/* MODAIS DE CADASTRO */}
+      {/* MODAL: ADICIONAR FINANÇAS */}
       {/* ========================================== */}
       {modalFin && (
         <div className="fixed inset-0 bg-[#090d16]/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
@@ -836,7 +904,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <label className="text-slate-400 font-medium block mb-1">Classificação</label>
-                  <select value={tipoGastoFin} onChange={e => setTipoGastoFin(e.target.value)} className="w-full bg-[#0b0f19] border border-slate-800 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-emerald-500">
+                  <select value={tipoGastoFin} onChange={e => setTipoGastoFin(e.target.value)} disabled={tipoFin === 'receita'} className="w-full bg-[#0b0f19] border border-slate-800 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-emerald-500">
                     <option value="Variável">Variável</option>
                     <option value="Fixo">Fixo</option>
                     {tipoFin === 'despesa' && <option value="Investimento">Investimento</option>}
@@ -898,21 +966,30 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* MODAL FACULDADE */}
       {modalDisc && (
         <div className="fixed inset-0 bg-[#090d16]/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-[#111726] border border-slate-800 w-full max-w-md rounded-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button onClick={() => setModalDisc(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"><X className="w-5 h-5"/></button>
-            <h3 className="text-base font-bold text-slate-100 mb-4 flex items-center gap-2"><GraduationCap className="w-4 h-4 text-cyan-400"/> Nova Disciplina ({alunoFaculdade})</h3>
+            <h3 className="text-base font-bold text-slate-100 mb-4 flex items-center gap-2"><GraduationCap className="w-4 h-4 text-cyan-400"/> {idEditandoDisc ? 'Editar' : 'Nova'} Disciplina ({alunoFaculdade})</h3>
             
             <form onSubmit={salvarDisciplina} className="space-y-3.5 text-xs">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-4 gap-3">
                 <div className="col-span-2">
                   <label className="text-slate-400 font-medium block mb-1">Nome da Disciplina</label>
                   <input type="text" required value={nomeDisc} onChange={e => setNomeDisc(e.target.value)} placeholder="Ex: Cálculo I..." className="w-full bg-[#0b0f19] border border-slate-800 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-cyan-500" />
                 </div>
                 <div>
                   <label className="text-slate-400 font-medium block mb-1">Semestre</label>
-                  <input type="text" value={semestreDisc} onChange={e => setSemestreDisc(e.target.value)} placeholder="2026.1" className="w-full bg-[#0b0f19] border border-slate-800 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-cyan-500" />
+                  <input type="text" value={semestreDisc} onChange={e => setSemestreDisc(e.target.value)} placeholder="2026.2" className="w-full bg-[#0b0f19] border border-slate-800 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-cyan-500" />
+                </div>
+                <div>
+                  <label className="text-slate-400 font-medium block mb-1">Provas</label>
+                  <select value={qtdProvasDisc} onChange={e => setQtdProvasDisc(e.target.value)} className="w-full bg-[#0b0f19] border border-slate-800 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-cyan-500">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                  </select>
                 </div>
               </div>
 
@@ -927,16 +1004,31 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 bg-[#0b0f19] p-3 rounded-xl border border-slate-800/80">
-                <div>
-                  <label className="text-slate-400 font-medium block mb-1">Nota P2 (0 a 100)</label>
-                  <input type="number" max="100" value={p2Disc} onChange={e => setP2Disc(e.target.value)} placeholder="0" className="w-full bg-[#111726] border border-slate-800 rounded-lg p-2 text-slate-100 font-bold focus:outline-none focus:border-cyan-500" />
+              {Number(qtdProvasDisc) >= 2 && (
+                <div className="grid grid-cols-2 gap-3 bg-[#0b0f19] p-3 rounded-xl border border-slate-800/80">
+                  <div>
+                    <label className="text-slate-400 font-medium block mb-1">Nota P2 (0 a 100)</label>
+                    <input type="number" max="100" value={p2Disc} onChange={e => setP2Disc(e.target.value)} placeholder="0" className="w-full bg-[#111726] border border-slate-800 rounded-lg p-2 text-slate-100 font-bold focus:outline-none focus:border-cyan-500" />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 font-medium block mb-1">Peso P2</label>
+                    <input type="number" step="0.1" value={pesoP2Disc} onChange={e => setPesoP2Disc(e.target.value)} className="w-full bg-[#111726] border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-cyan-500" />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-slate-400 font-medium block mb-1">Peso P2</label>
-                  <input type="number" step="0.1" value={pesoP2Disc} onChange={e => setPesoP2Disc(e.target.value)} className="w-full bg-[#111726] border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-cyan-500" />
+              )}
+
+              {Number(qtdProvasDisc) >= 3 && (
+                <div className="grid grid-cols-2 gap-3 bg-[#0b0f19] p-3 rounded-xl border border-slate-800/80">
+                  <div>
+                    <label className="text-slate-400 font-medium block mb-1">Nota P3 (0 a 100)</label>
+                    <input type="number" max="100" value={p3Disc} onChange={e => setP3Disc(e.target.value)} placeholder="0" className="w-full bg-[#111726] border border-slate-800 rounded-lg p-2 text-slate-100 font-bold focus:outline-none focus:border-cyan-500" />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 font-medium block mb-1">Peso P3</label>
+                    <input type="number" step="0.1" value={pesoP3Disc} onChange={e => setPesoP3Disc(e.target.value)} className="w-full bg-[#111726] border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-cyan-500" />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -950,13 +1042,14 @@ export default function Dashboard() {
               </div>
 
               <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold py-3 rounded-xl mt-3 shadow-md cursor-pointer transition-all">
-                Salvar Disciplina
+                {idEditandoDisc ? 'Atualizar Disciplina' : 'Salvar Nova Disciplina'}
               </button>
             </form>
           </div>
         </div>
       )}
 
+      {/* MODAL AGENDA */}
       {modalAgenda && (
         <div className="fixed inset-0 bg-[#090d16]/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-[#111726] border border-slate-800 w-full max-w-md rounded-2xl p-6 shadow-2xl relative">
