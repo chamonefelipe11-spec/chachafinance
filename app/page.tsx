@@ -54,7 +54,7 @@ export default function Dashboard() {
   const [aba, setAba] = useState<'financas' | 'faculdade' | 'agenda'>('financas');
   const [loading, setLoading] = useState(true);
 
-  // Filtros Finanças (Incluindo Período!)
+  // Filtros Finanças
   const [filtroQuem, setFiltroQuem] = useState('Todos');
   const [filtroCartao, setFiltroCartao] = useState('Todos');
   const [filtroPeriodo, setFiltroPeriodo] = useState('Todos');
@@ -180,7 +180,7 @@ export default function Dashboard() {
   async function salvarTransacao(e: React.FormEvent) {
     e.preventDefault();
     if (!valorFin) return alert('Digite um valor!');
-    const numParcelas = parceladoFin ? parseInt(totalParcelasFin) || 1 : 1;
+    const numParcelas = parceladoFin && tipoFin === 'despesa' ? parseInt(totalParcelasFin) || 1 : 1;
     const transacoesParaSalvar = [];
     const dataBase = new Date(dataFin + 'T12:00:00');
 
@@ -192,7 +192,7 @@ export default function Dashboard() {
       transacoesParaSalvar.push({
         descricao: descFinal, valor: parseFloat(valorFin), tipo: tipoFin, categoria: catFin,
         data: dataParcela.toISOString().split('T')[0], quem: quemFin, cartao: cartaoFin,
-        parcela_atual: i, total_parcelas: numParcelas, tipo_gasto: tipoFin === 'receita' ? 'Receita' : tipoGastoFin
+        parcela_atual: i, total_parcelas: numParcelas, tipo_gasto: tipoGastoFin
       });
     }
     await supabase.from('financas').insert(transacoesParaSalvar);
@@ -319,7 +319,7 @@ export default function Dashboard() {
   const notaNecessaria40 = Math.max(0, ((40 * (simPesoP1 + simPesoP2)) - (simP1 * simPesoP1)) / simPesoP2).toFixed(1);
 
   // ==========================================
-  // TELA DE LOGIN & CADASTRO BLINDADA
+  // TELA DE LOGIN & CADASTRO
   // ==========================================
   if (!sessao) {
     return (
@@ -423,15 +423,14 @@ export default function Dashboard() {
               <div className="flex flex-wrap items-center justify-between gap-4 bg-[#111726] p-4 rounded-2xl border border-slate-800/60">
                 <div className="flex flex-wrap items-center gap-4">
                   
-                  {/* FILTRO POR PESSOA */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-400">Pessoa:</span>
                     <div className="flex gap-1 bg-[#0b0f19] p-1 rounded-lg border border-slate-800">
                       {[
-                        { id: 'Todos', label: 'Todos' },
+                        { id: 'Todos', label: 'Todos (Geral)' },
                         { id: 'Chamone', label: 'Chamone' },
                         { id: 'Letícia', label: 'Letícia' },
-                        { id: 'Ambos', label: 'Ambos' }
+                        { id: 'Ambos', label: 'Ambos (Casal)' }
                       ].map((q) => (
                         <button key={q.id} onClick={() => setFiltroQuem(q.id)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${filtroQuem === q.id ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-500 hover:text-slate-300'}`}>
                           {q.label}
@@ -440,7 +439,6 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* FILTRO POR CONTA/CARTÃO */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-400">Conta:</span>
                     <select value={filtroCartao} onChange={e => setFiltroCartao(e.target.value)} className="bg-[#0b0f19] border border-slate-800 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-200 focus:outline-none focus:border-emerald-500">
@@ -453,7 +451,6 @@ export default function Dashboard() {
                     </select>
                   </div>
 
-                  {/* FILTRO POR PERÍODO */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-400">Período:</span>
                     <select 
@@ -805,34 +802,32 @@ export default function Dashboard() {
               <div>
                 <label className="text-slate-400 font-medium block mb-1">Tipo de Transação</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => setTipoFin('despesa')} className={`py-2 rounded-lg font-semibold border cursor-pointer ${tipoFin === 'despesa' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' : 'bg-[#0b0f19] text-slate-400 border-slate-800'}`}>Despesa (-)</button>
-                  <button type="button" onClick={() => setTipoFin('receita')} className={`py-2 rounded-lg font-semibold border cursor-pointer ${tipoFin === 'receita' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-[#0b0f19] text-slate-400 border-slate-800'}`}>Receita (+)</button>
+                  <button type="button" onClick={() => { setTipoFin('despesa'); setCatFin('Alimentação / Mercado'); }} className={`py-2 rounded-lg font-semibold border cursor-pointer ${tipoFin === 'despesa' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' : 'bg-[#0b0f19] text-slate-400 border-slate-800'}`}>Despesa (-)</button>
+                  <button type="button" onClick={() => { setTipoFin('receita'); setCatFin('Salário / Renda'); }} className={`py-2 rounded-lg font-semibold border cursor-pointer ${tipoFin === 'receita' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-[#0b0f19] text-slate-400 border-slate-800'}`}>Receita (+)</button>
                 </div>
               </div>
 
-              {tipoFin === 'despesa' && (
-                <div className="grid grid-cols-2 gap-3 bg-[#0b0f19] p-3 rounded-xl border border-slate-800/80">
-                  <div>
-                    <label className="text-slate-400 font-medium block mb-1">Quem Pagou?</label>
-                    <select value={quemFin} onChange={e => setQuemFin(e.target.value)} className="w-full bg-[#111726] border border-slate-800 rounded-lg p-2 font-medium text-slate-100">
-                      <option value="Chamone">Chamone</option>
-                      <option value="Letícia">Letícia</option>
-                      <option value="Ambos">Ambos (Compartilhado)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-slate-400 font-medium block mb-1">Cartão / Forma</label>
-                    <select value={cartaoFin} onChange={e => setCartaoFin(e.target.value)} className="w-full bg-[#111726] border border-slate-800 rounded-lg p-2 font-medium text-slate-100">
-                      <option value="Débito / Pix">Débito / Pix</option>
-                      <option value="Caju">Caju</option>
-                      <option value="Intercred">Intercred</option>
-                      <option value="Nubank">Nubank</option>
-                      <option value="XP">XP</option>
-                      <option value="Outro">Outro</option>
-                    </select>
-                  </div>
+              <div className="grid grid-cols-2 gap-3 bg-[#0b0f19] p-3 rounded-xl border border-slate-800/80">
+                <div>
+                  <label className="text-slate-400 font-medium block mb-1">{tipoFin === 'receita' ? 'Quem Recebeu?' : 'Quem Pagou?'}</label>
+                  <select value={quemFin} onChange={e => setQuemFin(e.target.value)} className="w-full bg-[#111726] border border-slate-800 rounded-lg p-2 font-medium text-slate-100">
+                    <option value="Chamone">Chamone</option>
+                    <option value="Letícia">Letícia</option>
+                    <option value="Ambos">Ambos</option>
+                  </select>
                 </div>
-              )}
+                <div>
+                  <label className="text-slate-400 font-medium block mb-1">{tipoFin === 'receita' ? 'Onde Caiu?' : 'Cartão / Forma'}</label>
+                  <select value={cartaoFin} onChange={e => setCartaoFin(e.target.value)} className="w-full bg-[#111726] border border-slate-800 rounded-lg p-2 font-medium text-slate-100">
+                    <option value="Débito / Pix">Débito / Pix</option>
+                    <option value="Caju">Caju</option>
+                    <option value="Intercred">Intercred</option>
+                    <option value="Nubank">Nubank</option>
+                    <option value="XP">XP</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+                </div>
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -841,10 +836,10 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <label className="text-slate-400 font-medium block mb-1">Classificação</label>
-                  <select value={tipoGastoFin} onChange={e => setTipoGastoFin(e.target.value)} disabled={tipoFin === 'receita'} className="w-full bg-[#0b0f19] border border-slate-800 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-emerald-500">
+                  <select value={tipoGastoFin} onChange={e => setTipoGastoFin(e.target.value)} className="w-full bg-[#0b0f19] border border-slate-800 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-emerald-500">
                     <option value="Variável">Variável</option>
                     <option value="Fixo">Fixo</option>
-                    <option value="Investimento">Investimento</option>
+                    {tipoFin === 'despesa' && <option value="Investimento">Investimento</option>}
                   </select>
                 </div>
               </div>
@@ -896,7 +891,7 @@ export default function Dashboard() {
               )}
 
               <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 rounded-xl mt-3 shadow-md cursor-pointer transition-all">
-                {parceladoFin ? `Salvar ${totalParcelasFin} Parcelas` : 'Salvar'}
+                {parceladoFin && tipoFin === 'despesa' ? `Salvar ${totalParcelasFin} Parcelas` : 'Salvar'}
               </button>
             </form>
           </div>
