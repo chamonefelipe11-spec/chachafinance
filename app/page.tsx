@@ -5,13 +5,13 @@ import { supabase } from '@/lib/supabase';
 import * as XLSX from 'xlsx';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, CartesianGrid, Legend, AreaChart, Area
+  PieChart, Pie, Cell, CartesianGrid, Legend 
 } from 'recharts';
 import { 
   Wallet, GraduationCap, AlertTriangle, 
-  CheckCircle, Plus, Trash2, TrendingUp, BookOpen, Calculator, X, 
-  Users, CreditCard, LogOut, Lock, FileSpreadsheet, 
-  UserPlus, Calendar, CheckSquare, Square, Clock, Menu, ArrowRightLeft, Landmark, ShoppingBag
+  Plus, Trash2, X, Users, CreditCard, LogOut, Lock, FileSpreadsheet, Download,
+  UserPlus, Calendar, CheckSquare, Square, Clock, Landmark, ShoppingBag,
+  ArrowUpRight, ArrowDownRight, PieChart as PieChartIcon
 } from 'lucide-react';
 
 const CORES_CATEGORIAS: { [key: string]: string } = {
@@ -45,7 +45,6 @@ export default function Dashboard() {
   const [agenda, setAgenda] = useState<any[]>([]);
   const [aba, setAba] = useState<'financas' | 'faculdade' | 'agenda'>('financas');
   const [loading, setLoading] = useState(true);
-  const [menuMobileAberto, setMenuMobileAberto] = useState(false);
   const [menuFabAberto, setMenuFabAberto] = useState(false);
 
   // Filtros Finanças
@@ -89,11 +88,6 @@ export default function Dashboard() {
   const [horaAgenda, setHoraAgenda] = useState('09:00');
   const [catAgenda, setCatAgenda] = useState('Faculdade / Prova');
   const [quemAgenda, setQuemAgenda] = useState('Ambos');
-
-  // Simulador Preditivo
-  const [simP1, setSimP1] = useState<number>(0);
-  const [simPesoP1, setSimPesoP1] = useState<number>(1);
-  const [simPesoP2, setSimPesoP2] = useState<number>(1);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -185,7 +179,7 @@ export default function Dashboard() {
         cartao: cartaoFin,
         parcela_atual: i, 
         total_parcelas: modoRepeticao === 'parcelado' ? numRepeticoes : 1, 
-        tipo_gasto: modoRepeticao === 'fixo' ? 'Fixo' : (tipoFin === 'receita' ? 'Receita' : tipoGastoFin)
+        tipo_gasto: modoRepeticao === 'fixo' ? 'Fixo' : tipoGastoFin
       });
     }
 
@@ -196,24 +190,6 @@ export default function Dashboard() {
 
   async function removerTransacao(id: string) {
     if (confirm('Apagar lançamento?')) { await supabase.from('financas').delete().eq('id', id); carregarDados(); }
-  }
-
-  // --- CRUD FACULDADE ---
-  async function salvarDisciplina(e: React.FormEvent) {
-    e.preventDefault();
-    if (!nomeDisc) return alert('Digite o nome da disciplina!');
-    await supabase.from('disciplinas').insert([{
-      nome: nomeDisc, semestre: semestreDisc, nota_p1: p1Disc ? parseFloat(p1Disc) : 0,
-      peso_p1: parseFloat(pesoP1Disc) || 1, nota_p2: p2Disc ? parseFloat(p2Disc) : 0,
-      peso_p2: parseFloat(pesoP2Disc) || 1, faltas: parseInt(faltasDisc) || 0,
-      max_faltas: parseInt(maxFaltasDisc) || 16, aluno: alunoFaculdade
-    }]);
-    setModalDisc(false); setNomeDisc(''); setP1Disc(''); setP2Disc('');
-    carregarDados();
-  }
-
-  async function removerDisciplina(id: string) {
-    if (confirm('Apagar disciplina?')) { await supabase.from('disciplinas').delete().eq('id', id); carregarDados(); }
   }
 
   // --- FILTRAGEM INTELIGENTE ---
@@ -244,13 +220,8 @@ export default function Dashboard() {
   });
 
   // --- CÁLCULOS FINANCEIROS CORRIGIDOS ---
-  // Receitas (ignorando investimentos para não duplicar)
   const receitas = financasFiltradas.filter(f => f.tipo === 'receita' && !f.categoria.includes('Investimento')).reduce((acc, cur) => acc + Number(cur.valor), 0);
-  
-  // Despesas (ignorando investimentos)
   const despesas = financasFiltradas.filter(f => f.tipo === 'despesa' && !f.categoria.includes('Investimento')).reduce((acc, cur) => acc + Number(cur.valor), 0);
-  
-  // Investimentos (qualquer tipo que tenha a categoria ou classificação "Investimento")
   const investimentos = financasFiltradas.filter(f => f.categoria.includes('Investimento') || f.tipo_gasto === 'Investimento').reduce((acc, cur) => acc + Number(cur.valor), 0);
 
   const saldo = receitas - despesas - investimentos;
@@ -265,12 +236,6 @@ export default function Dashboard() {
     else acc.push({ name: cur.categoria, value: Number(cur.valor) });
     return acc;
   }, []);
-
-  const gastosPorPessoa = [
-    { name: 'Chamone', valor: financasFiltradas.filter(f => f.tipo === 'despesa' && f.quem === 'Chamone').reduce((a, c) => a + Number(c.valor), 0), fill: '#3B82F6' },
-    { name: 'Letícia', valor: financasFiltradas.filter(f => f.tipo === 'despesa' && f.quem === 'Letícia').reduce((a, c) => a + Number(c.valor), 0), fill: '#D946EF' },
-    { name: 'Ambos', valor: financasFiltradas.filter(f => f.tipo === 'despesa' && f.quem === 'Ambos').reduce((a, c) => a + Number(c.valor), 0), fill: '#8B5CF6' }
-  ];
 
   // ==========================================
   // TELA DE LOGIN & CADASTRO
@@ -313,7 +278,7 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-[#121212] text-slate-100 font-sans overflow-hidden">
       
-      {/* MENU LATERAL (SIDEBAR) - DESKTOP */}
+      {/* MENU LATERAL (SIDEBAR) */}
       <aside className="w-64 bg-[#1E1E1E] border-r border-slate-800 hidden md:flex flex-col justify-between">
         <div>
           <div className="h-20 flex items-center px-6 border-b border-slate-800">
@@ -326,7 +291,7 @@ export default function Dashboard() {
           </div>
           <nav className="p-4 space-y-2">
             <button onClick={() => setAba('financas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${aba === 'financas' ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-              <PieChart className="w-5 h-5" /> Dashboard
+              <PieChartIcon className="w-5 h-5" /> Dashboard
             </button>
             <button onClick={() => setAba('faculdade')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${aba === 'faculdade' ? 'bg-cyan-500/10 text-cyan-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
               <GraduationCap className="w-5 h-5" /> Vida Acadêmica
@@ -359,7 +324,6 @@ export default function Dashboard() {
             <h2 className="text-xl font-bold text-slate-100 hidden md:block">
               {aba === 'financas' ? 'Dashboard Financeiro' : aba === 'faculdade' ? 'Controle Acadêmico' : 'Agenda e Metas'}
             </h2>
-            {/* Filtro Rápido de Mês no Header (Estilo Mobills) */}
             {aba === 'financas' && (
               <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value)} className="bg-[#1E1E1E] border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer">
                 <option value="MesAtual">Mês Atual</option>
@@ -386,12 +350,9 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              {/* ========================================== */}
               {/* DASHBOARD FINANÇAS */}
-              {/* ========================================== */}
               {aba === 'financas' && (
                 <div className="space-y-6 max-w-7xl mx-auto pb-24">
-                  {/* BARRA DE FILTROS AVANÇADOS */}
                   <div className="flex flex-wrap gap-4 bg-[#1E1E1E] p-4 rounded-xl border border-slate-800">
                     <div className="flex items-center gap-2">
                       <Users className="w-4 h-4 text-slate-500" />
@@ -433,7 +394,6 @@ export default function Dashboard() {
                       </div>
                       <span className="text-2xl font-bold text-slate-100">R$ {receitas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
-                    
                     <div className="bg-[#1E1E1E] border border-slate-800 p-5 rounded-2xl flex flex-col">
                       <div className="flex items-center gap-2 text-slate-400 mb-2">
                         <ArrowDownRight className="w-4 h-4 text-rose-400" /> <span className="text-xs font-semibold uppercase">Despesas</span>
@@ -441,7 +401,6 @@ export default function Dashboard() {
                       <span className="text-2xl font-bold text-slate-100">R$ {despesas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       <span className="text-xs text-slate-500 mt-1">Fixas: R$ {despesasFixas.toFixed(2)}</span>
                     </div>
-
                     <div className="bg-[#1E1E1E] border border-slate-800 p-5 rounded-2xl flex flex-col">
                       <div className="flex items-center gap-2 text-slate-400 mb-2">
                         <Landmark className="w-4 h-4 text-cyan-400" /> <span className="text-xs font-semibold uppercase">Investimentos</span>
@@ -449,7 +408,6 @@ export default function Dashboard() {
                       <span className="text-2xl font-bold text-cyan-400">R$ {investimentos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       <span className="text-xs text-slate-500 mt-1">Poupança: {taxaPoupança}%</span>
                     </div>
-
                     <div className="bg-gradient-to-br from-emerald-500/20 to-emerald-900/20 border border-emerald-500/30 p-5 rounded-2xl flex flex-col">
                       <div className="flex items-center gap-2 text-emerald-400 mb-2">
                         <Wallet className="w-4 h-4" /> <span className="text-xs font-bold uppercase">Saldo Geral</span>
@@ -460,7 +418,6 @@ export default function Dashboard() {
 
                   {/* GRÁFICOS E TABELAS */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* GRÁFICO CATEGORIAS */}
                     <div className="bg-[#1E1E1E] border border-slate-800 p-6 rounded-2xl lg:col-span-1">
                       <h3 className="text-sm font-bold text-slate-100 mb-6">Despesas por Categoria</h3>
                       <div className="h-60">
@@ -477,7 +434,6 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* LISTA DE TRANSAÇÕES ESTILO MOBILLS */}
                     <div className="bg-[#1E1E1E] border border-slate-800 rounded-2xl lg:col-span-2 overflow-hidden flex flex-col">
                       <div className="p-6 border-b border-slate-800 flex justify-between items-center">
                         <h3 className="text-sm font-bold text-slate-100">Transações Recentes</h3>
@@ -514,22 +470,11 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
-
-              {/* OUTRAS ABAS (Mantidas integras com o layout novo) */}
-              {aba === 'faculdade' && (
-                <div className="max-w-7xl mx-auto text-center text-slate-400 py-20">
-                  {/* O código da aba faculdade ficaria aqui, adaptado ao layout escuro limpo. Por brevidade e foco na solução financeira do Mobills, omitido na visualização parcial, mas mantido na sua base */}
-                  <h2 className="text-2xl font-bold text-white mb-2">Vida Acadêmica</h2>
-                  <p>Acesse o simulador de notas e CR pelo botão de cadastro flutuante.</p>
-                </div>
-              )}
             </>
           )}
         </div>
         
-        {/* ========================================== */}
         {/* BOTÃO FLUTUANTE (FAB) ESTILO MOBILLS */}
-        {/* ========================================== */}
         <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-3">
           {menuFabAberto && (
             <div className="flex flex-col gap-2 mb-2 items-end animate-fadeIn">
@@ -554,9 +499,7 @@ export default function Dashboard() {
 
       </main>
 
-      {/* ========================================== */}
-      {/* MODAL FINANÇAS (COM RECORRÊNCIA E CONTAS ATUALIZADAS) */}
-      {/* ========================================== */}
+      {/* MODAL FINANÇAS */}
       {modalFin && (
         <div className="fixed inset-0 bg-[#000000]/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-fadeIn">
           <div className="bg-[#1E1E1E] border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -567,7 +510,6 @@ export default function Dashboard() {
             </div>
             
             <form onSubmit={salvarTransacao} className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
-              
               <div className="flex bg-[#121212] p-1 rounded-xl border border-slate-800">
                 <button type="button" onClick={() => setTipoFin('despesa')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${tipoFin === 'despesa' ? 'bg-rose-500 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Despesa</button>
                 <button type="button" onClick={() => setTipoFin('receita')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${tipoFin === 'receita' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-slate-200'}`}>Receita</button>
@@ -580,7 +522,7 @@ export default function Dashboard() {
 
               <div>
                 <label className="text-xs font-semibold text-slate-400 block mb-1">Descrição</label>
-                <input type="text" required value={descFin} onChange={e => setDescFin(e.target.value)} placeholder="Ex: Conta de Luz, Mercado..." className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:border-emerald-500" />
+                <input type="text" required value={descFin} onChange={e => setDescFin(e.target.value)} placeholder="Ex: Conta de Luz, Salário, Aporte..." className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:border-emerald-500" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -607,7 +549,7 @@ export default function Dashboard() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">De onde saiu/entrou?</label>
+                  <label className="text-xs font-semibold text-slate-400 block mb-1">{tipoFin === 'receita' ? 'Onde Caiu?' : 'Cartão / Forma'}</label>
                   <select value={cartaoFin} onChange={e => setCartaoFin(e.target.value)} className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:border-emerald-500">
                     <optgroup label="Contas">
                       <option value="Conta Corrente / Pix">Conta Corrente / Pix</option>
@@ -626,7 +568,7 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">Responsável</label>
+                  <label className="text-xs font-semibold text-slate-400 block mb-1">{tipoFin === 'receita' ? 'Quem Recebeu?' : 'Quem Pagou?'}</label>
                   <select value={quemFin} onChange={e => setQuemFin(e.target.value)} className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:border-emerald-500">
                     <option value="Chamone">Chamone</option>
                     <option value="Letícia">Letícia</option>
@@ -635,27 +577,34 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              <div>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">Classificação</label>
+                <select value={tipoGastoFin} onChange={e => setTipoGastoFin(e.target.value)} className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:border-emerald-500">
+                  <option value="Variável">Variável</option>
+                  <option value="Fixo">Fixo</option>
+                  <option value="Investimento">Investimento</option>
+                </select>
+              </div>
+
               {/* RECORRÊNCIA E PARCELAMENTO */}
-              {tipoFin === 'despesa' && (
-                <div className="bg-[#121212] p-4 rounded-xl border border-slate-800 space-y-3">
-                  <label className="text-xs font-semibold text-slate-400 block">Tipo de Gasto & Repetição</label>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => setModoRepeticao('nenhuma')} className={`flex-1 py-1.5 rounded border text-xs font-medium ${modoRepeticao === 'nenhuma' ? 'bg-slate-800 border-slate-600 text-white' : 'border-slate-800 text-slate-500'}`}>Única (Variável)</button>
-                    <button type="button" onClick={() => setModoRepeticao('parcelado')} className={`flex-1 py-1.5 rounded border text-xs font-medium ${modoRepeticao === 'parcelado' ? 'bg-slate-800 border-slate-600 text-white' : 'border-slate-800 text-slate-500'}`}>Parcelada</button>
-                    <button type="button" onClick={() => setModoRepeticao('fixo')} className={`flex-1 py-1.5 rounded border text-xs font-medium ${modoRepeticao === 'fixo' ? 'bg-slate-800 border-slate-600 text-white' : 'border-slate-800 text-slate-500'}`}>Fixa (Mensal)</button>
-                  </div>
-                  
-                  {modoRepeticao !== 'nenhuma' && (
-                    <div className="flex items-center justify-between pt-2">
-                      <span className="text-xs text-slate-300">{modoRepeticao === 'parcelado' ? 'Em quantas vezes?' : 'Repetir por quantos meses?'}</span>
-                      <div className="flex items-center gap-2">
-                        <input type="number" min="2" max="60" value={qtdRepeticao} onChange={e => setQtdRepeticao(e.target.value)} className="w-16 bg-[#1E1E1E] border border-slate-700 rounded-lg p-1.5 text-center text-sm font-bold text-white focus:outline-none" />
-                        <span className="text-xs text-slate-500">meses</span>
-                      </div>
-                    </div>
-                  )}
+              <div className="bg-[#121212] p-4 rounded-xl border border-slate-800 space-y-3">
+                <label className="text-xs font-semibold text-slate-400 block">Tipo de Repetição</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setModoRepeticao('nenhuma')} className={`flex-1 py-1.5 rounded border text-xs font-medium ${modoRepeticao === 'nenhuma' ? 'bg-slate-800 border-slate-600 text-white' : 'border-slate-800 text-slate-500'}`}>Única</button>
+                  <button type="button" onClick={() => setModoRepeticao('parcelado')} className={`flex-1 py-1.5 rounded border text-xs font-medium ${modoRepeticao === 'parcelado' ? 'bg-slate-800 border-slate-600 text-white' : 'border-slate-800 text-slate-500'}`}>Parcelada</button>
+                  <button type="button" onClick={() => setModoRepeticao('fixo')} className={`flex-1 py-1.5 rounded border text-xs font-medium ${modoRepeticao === 'fixo' ? 'bg-slate-800 border-slate-600 text-white' : 'border-slate-800 text-slate-500'}`}>Fixa (Mensal)</button>
                 </div>
-              )}
+                
+                {modoRepeticao !== 'nenhuma' && (
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-xs text-slate-300">{modoRepeticao === 'parcelado' ? 'Em quantas vezes?' : 'Repetir por quantos meses?'}</span>
+                    <div className="flex items-center gap-2">
+                      <input type="number" min="2" max="60" value={qtdRepeticao} onChange={e => setQtdRepeticao(e.target.value)} className="w-16 bg-[#1E1E1E] border border-slate-700 rounded-lg p-1.5 text-center text-sm font-bold text-white focus:outline-none" />
+                      <span className="text-xs text-slate-500">meses</span>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl mt-6 shadow-lg shadow-emerald-500/20 transition-transform active:scale-95">
                 Confirmar Lançamento
