@@ -47,10 +47,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [menuFabAberto, setMenuFabAberto] = useState(false);
 
-  // Filtros Finanças (Iniciando com 'Todos' para não esconder os dados passados)
+  // Filtros Finanças
   const [filtroQuem, setFiltroQuem] = useState('Todos');
   const [filtroCartao, setFiltroCartao] = useState('Todos');
-  const [filtroPeriodo, setFiltroPeriodo] = useState('Todos');
+  const [filtroPeriodo, setFiltroPeriodo] = useState('MesAtual');
   const [alunoFaculdade, setAlunoFaculdade] = useState<'Chamone' | 'Letícia'>('Chamone');
 
   // Modais
@@ -86,6 +86,11 @@ export default function Dashboard() {
   const [pesoP3Disc, setPesoP3Disc] = useState('1');
   const [faltasDisc, setFaltasDisc] = useState('0');
   const [maxFaltasDisc, setMaxFaltasDisc] = useState('16');
+
+  // Simulador Preditivo
+  const [simP1, setSimP1] = useState<number>(0);
+  const [simPesoP1, setSimPesoP1] = useState<number>(1);
+  const [simPesoP2, setSimPesoP2] = useState<number>(1);
 
   // Formulário Agenda
   const [tituloAgenda, setTituloAgenda] = useState('');
@@ -337,7 +342,6 @@ export default function Dashboard() {
   }
 
   // --- LÓGICA DE PROTEÇÃO DE DADOS (FILTRO DE INVESTIMENTOS BLINDADO) ---
-  // Impede que dados legados sem rótulo correto quebrem o sistema
   const isInvestimento = (f: any) => {
     const cat = (f.categoria || '').toLowerCase();
     const tg = (f.tipo_gasto || '').toLowerCase();
@@ -378,17 +382,10 @@ export default function Dashboard() {
   });
 
   // --- MATEMÁTICA FINANCEIRA BLINDADA ---
-  // Somar Receitas (excluindo os investimentos que foram lançados como receita por acidente)
   const receitas = financasFiltradas.filter(f => f.tipo === 'receita' && !isInvestimento(f)).reduce((acc, cur) => acc + Number(cur.valor), 0);
-  
-  // Somar Despesas (excluindo qualquer tipo de investimento)
   const despesas = financasFiltradas.filter(f => f.tipo === 'despesa' && !isInvestimento(f)).reduce((acc, cur) => acc + Number(cur.valor), 0);
-  
-  // Somar Investimentos (Captura todos, sejam eles receitas ou despesas passadas)
   const investimentos = financasFiltradas.filter(f => isInvestimento(f)).reduce((acc, cur) => acc + Number(cur.valor), 0);
-
   const saldoMes = receitas - despesas;
-  
   const despesasFixas = financasFiltradas.filter(f => f.tipo === 'despesa' && !isInvestimento(f) && ((f.tipo_gasto || '') === 'Fixo' || (f.descricao || '').includes('Fixo'))).reduce((acc, cur) => acc + Number(cur.valor), 0);
   const despesasVariaveis = despesas - despesasFixas;
 
@@ -538,11 +535,11 @@ export default function Dashboard() {
             </h2>
             {(aba === 'financas' || aba === 'analises') && (
               <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value)} className="bg-[#1E1E1E] text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:border-emerald-500 cursor-pointer">
-                <option className="bg-[#1E1E1E] text-slate-200" value="MesAtual">Mês Atual</option>
-                <option className="bg-[#1E1E1E] text-slate-200" value="MesAnterior">Mês Passado</option>
-                <option className="bg-[#1E1E1E] text-slate-200" value="Trimestre">Últimos 3 Meses</option>
-                <option className="bg-[#1E1E1E] text-slate-200" value="Ano">Este Ano</option>
-                <option className="bg-[#1E1E1E] text-slate-200" value="Todos">Todo o Histórico</option>
+                <option value="MesAtual">Mês Atual</option>
+                <option value="MesAnterior">Mês Passado</option>
+                <option value="Trimestre">Últimos 3 Meses</option>
+                <option value="Ano">Este Ano</option>
+                <option value="Todos">Todo o Histórico</option>
               </select>
             )}
           </div>
@@ -567,37 +564,37 @@ export default function Dashboard() {
               {/* ========================================== */}
               {aba === 'financas' && (
                 <div className="space-y-6 max-w-7xl mx-auto pb-24">
-                  {/* BARRA DE FILTROS AVANÇADOS */}
+                  {/* BARRA DE FILTROS AVANÇADOS (ESTILIZADOS) */}
                   <div className="flex flex-wrap gap-4 bg-[#1E1E1E] p-4 rounded-xl border border-slate-800">
                     <div className="flex items-center gap-2">
                       <Users className="w-4 h-4 text-slate-500" />
-                      <select value={filtroQuem} onChange={e => setFiltroQuem(e.target.value)} className="bg-[#1E1E1E] text-sm font-medium text-slate-200 focus:outline-none cursor-pointer">
-                        <option className="bg-[#1E1E1E] text-slate-200" value="Todos">Todos os Membros</option>
-                        <option className="bg-[#1E1E1E] text-slate-200" value="Chamone">Chamone</option>
-                        <option className="bg-[#1E1E1E] text-slate-200" value="Letícia">Letícia</option>
-                        <option className="bg-[#1E1E1E] text-slate-200" value="Ambos">Ambos (Compartilhado)</option>
+                      <select value={filtroQuem} onChange={e => setFiltroQuem(e.target.value)} className="bg-[#1E1E1E] border border-slate-700 rounded p-1 text-sm font-medium text-slate-200 focus:outline-none cursor-pointer">
+                        <option value="Todos">Todos os Membros</option>
+                        <option value="Chamone">Chamone</option>
+                        <option value="Letícia">Letícia</option>
+                        <option value="Ambos">Ambos (Compartilhado)</option>
                       </select>
                     </div>
                     <div className="w-px h-6 bg-slate-700 hidden sm:block"></div>
                     <div className="flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-slate-500" />
-                      <select value={filtroCartao} onChange={e => setFiltroCartao(e.target.value)} className="bg-[#1E1E1E] text-sm font-medium text-slate-200 focus:outline-none cursor-pointer">
-                        <option className="bg-[#1E1E1E] text-slate-200" value="Todos">Todas as Contas e Vales</option>
-                        <optgroup label="Contas Bancárias" className="bg-[#1E1E1E] text-slate-400">
-                          <option className="text-slate-100" value="Conta Corrente / Pix">Conta Corrente / Pix</option>
-                          <option className="text-slate-100" value="XP">XP Investimentos</option>
-                          <option className="text-slate-100" value="Inter">Banco Inter</option>
+                      <select value={filtroCartao} onChange={e => setFiltroCartao(e.target.value)} className="bg-[#1E1E1E] border border-slate-700 rounded p-1 text-sm font-medium text-slate-200 focus:outline-none cursor-pointer">
+                        <option value="Todos">Todas as Contas e Vales</option>
+                        <optgroup label="Contas Bancárias">
+                          <option value="Conta Corrente / Pix">Conta Corrente / Pix</option>
+                          <option value="XP">XP Investimentos</option>
+                          <option value="Inter">Banco Inter</option>
                         </optgroup>
-                        <optgroup label="Cartões de Crédito" className="bg-[#1E1E1E] text-slate-400">
-                          <option className="text-slate-100" value="Cartão Intercred">Cartão Intercred</option>
-                          <option className="text-slate-100" value="Cartão Nubank">Cartão Nubank</option>
+                        <optgroup label="Cartões de Crédito">
+                          <option value="Cartão Intercred">Cartão Intercred</option>
+                          <option value="Cartão Nubank">Cartão Nubank</option>
                         </optgroup>
-                        <optgroup label="Vales Benefício" className="bg-[#1E1E1E] text-slate-400">
-                          <option className="text-slate-100" value="Caju VA">Caju (Alimentação)</option>
-                          <option className="text-slate-100" value="Caju VR">Caju (Refeição)</option>
-                          <option className="text-slate-100" value="Caju Cultura">Caju (Cultura/Saúde)</option>
-                          <option className="text-slate-100" value="Caju Mobilidade">Caju (Mobilidade)</option>
-                          <option className="text-slate-100" value="VR Padrão">VR Padrão</option>
+                        <optgroup label="Vales Benefício">
+                          <option value="Caju VA">Caju (Alimentação)</option>
+                          <option value="Caju VR">Caju (Refeição)</option>
+                          <option value="Caju Cultura">Caju (Cultura/Saúde)</option>
+                          <option value="Caju Mobilidade">Caju (Mobilidade)</option>
+                          <option value="VR Padrão">VR Padrão</option>
                         </optgroup>
                       </select>
                     </div>
@@ -673,8 +670,8 @@ export default function Dashboard() {
                                 </td>
                                 <td className="p-3 text-center">
                                   <div className="flex justify-center items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => abrirEdicaoTransacao(f)} className="text-slate-500 hover:text-cyan-400 transition-colors"><Pencil className="w-4 h-4"/></button>
-                                    <button onClick={() => removerTransacao(f.id)} className="text-slate-500 hover:text-rose-400 transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                    <button onClick={() => abrirEdicaoTransacao(f)} className="text-slate-500 hover:text-cyan-400 transition-colors cursor-pointer"><Pencil className="w-4 h-4"/></button>
+                                    <button onClick={() => removerTransacao(f.id)} className="text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"><Trash2 className="w-4 h-4"/></button>
                                   </div>
                                 </td>
                               </tr>
@@ -1031,17 +1028,17 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-400 block mb-1">Categoria</label>
-                  <select value={catFin} onChange={e => setCatFin(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-700 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500">
-                    <option className="bg-[#1E1E1E] text-slate-200" value="Alimentação / Mercado">Alimentação / Mercado</option>
-                    <option className="bg-[#1E1E1E] text-slate-200" value="FastFood / iFood">FastFood / iFood</option>
-                    <option className="bg-[#1E1E1E] text-slate-200" value="Moradia / Aluguel">Moradia / Aluguel</option>
-                    <option className="bg-[#1E1E1E] text-slate-200" value="Transporte / Uber">Transporte / Uber</option>
-                    <option className="bg-[#1E1E1E] text-slate-200" value="Assinaturas / Streaming">Assinaturas / Streaming</option>
-                    <option className="bg-[#1E1E1E] text-slate-200" value="Saúde / Farmácia">Saúde / Farmácia</option>
-                    <option className="bg-[#1E1E1E] text-slate-200" value="Lazer / Passeio">Lazer / Passeio</option>
-                    <option className="bg-[#1E1E1E] text-slate-200" value="Investimentos (CDB/XP)">Investimentos (CDB/XP)</option>
-                    <option className="bg-[#1E1E1E] text-slate-200" value="Salário / Renda">Salário / Renda</option>
-                    <option className="bg-[#1E1E1E] text-slate-200" value="Outros">Outros</option>
+                  <select value={catFin} onChange={e => setCatFin(e.target.value)} className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                    <option className="bg-[#1E1E1E]" value="Alimentação / Mercado">Alimentação / Mercado</option>
+                    <option className="bg-[#1E1E1E]" value="FastFood / iFood">FastFood / iFood</option>
+                    <option className="bg-[#1E1E1E]" value="Moradia / Aluguel">Moradia / Aluguel</option>
+                    <option className="bg-[#1E1E1E]" value="Transporte / Uber">Transporte / Uber</option>
+                    <option className="bg-[#1E1E1E]" value="Assinaturas / Streaming">Assinaturas / Streaming</option>
+                    <option className="bg-[#1E1E1E]" value="Saúde / Farmácia">Saúde / Farmácia</option>
+                    <option className="bg-[#1E1E1E]" value="Lazer / Passeio">Lazer / Passeio</option>
+                    <option className="bg-[#1E1E1E]" value="Investimentos (CDB/XP)">Investimentos (CDB/XP)</option>
+                    <option className="bg-[#1E1E1E]" value="Salário / Renda">Salário / Renda</option>
+                    <option className="bg-[#1E1E1E]" value="Outros">Outros</option>
                   </select>
                 </div>
                 <div>
@@ -1053,28 +1050,28 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-400 block mb-1">{tipoFin === 'receita' ? 'Onde Caiu?' : 'Cartão / Forma'}</label>
-                  <select value={cartaoFin} onChange={e => setCartaoFin(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-700 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500">
-                    <optgroup label="Contas" className="bg-[#1E1E1E] text-slate-400">
-                      <option className="text-slate-200" value="Conta Corrente / Pix">Conta Corrente / Pix</option>
-                      <option className="text-slate-200" value="XP">XP Investimentos</option>
-                      <option className="text-slate-200" value="Inter">Banco Inter</option>
+                  <select value={cartaoFin} onChange={e => setCartaoFin(e.target.value)} className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                    <optgroup label="Contas" className="bg-[#1E1E1E]">
+                      <option value="Conta Corrente / Pix">Conta Corrente / Pix</option>
+                      <option value="XP">XP Investimentos</option>
+                      <option value="Inter">Banco Inter</option>
                     </optgroup>
-                    <optgroup label="Cartões de Crédito" className="bg-[#1E1E1E] text-slate-400">
-                      <option className="text-slate-200" value="Cartão Intercred">Cartão Intercred</option>
-                      <option className="text-slate-200" value="Cartão Nubank">Cartão Nubank</option>
+                    <optgroup label="Cartões de Crédito" className="bg-[#1E1E1E]">
+                      <option value="Cartão Intercred">Cartão Intercred</option>
+                      <option value="Cartão Nubank">Cartão Nubank</option>
                     </optgroup>
-                    <optgroup label="Vales Benefício" className="bg-[#1E1E1E] text-slate-400">
-                      <option className="text-slate-200" value="Caju VA">Caju (Alimentação)</option>
-                      <option className="text-slate-200" value="Caju VR">Caju (Refeição)</option>
-                      <option className="text-slate-200" value="Caju Cultura">Caju (Cultura)</option>
-                      <option className="text-slate-200" value="Caju Mobilidade">Caju (Mobilidade)</option>
-                      <option className="text-slate-200" value="VR Padrão">VR Padrão</option>
+                    <optgroup label="Vales Benefício" className="bg-[#1E1E1E]">
+                      <option value="Caju VA">Caju (Alimentação)</option>
+                      <option value="Caju VR">Caju (Refeição)</option>
+                      <option value="Caju Cultura">Caju (Cultura)</option>
+                      <option value="Caju Mobilidade">Caju (Mobilidade)</option>
+                      <option value="VR Padrão">VR Padrão</option>
                     </optgroup>
                   </select>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-400 block mb-1">{tipoFin === 'receita' ? 'Quem Recebeu?' : 'Quem Pagou?'}</label>
-                  <select value={quemFin} onChange={e => setQuemFin(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-700 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500">
+                  <select value={quemFin} onChange={e => setQuemFin(e.target.value)} className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
                     <option className="bg-[#1E1E1E]" value="Chamone">Chamone</option>
                     <option className="bg-[#1E1E1E]" value="Letícia">Letícia</option>
                     <option className="bg-[#1E1E1E]" value="Ambos">Ambos (Casal)</option>
@@ -1084,14 +1081,14 @@ export default function Dashboard() {
 
               <div>
                 <label className="text-xs font-semibold text-slate-400 block mb-1">Classificação do Lançamento</label>
-                <select value={tipoGastoFin} onChange={e => setTipoGastoFin(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-700 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500">
+                <select value={tipoGastoFin} onChange={e => setTipoGastoFin(e.target.value)} className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
                   <option className="bg-[#1E1E1E]" value="Variável">Variável / Esporádico</option>
                   <option className="bg-[#1E1E1E]" value="Fixo">Fixo / Recorrente mensalmente</option>
                   <option className="bg-[#1E1E1E]" value="Investimento">Investimento</option>
                 </select>
               </div>
 
-              {/* RECORRÊNCIA E PARCELAMENTO SÓ APARECEM NA CRIAÇÃO */}
+              {/* RECORRÊNCIA SÓ NA CRIAÇÃO */}
               {!idEditandoFin && (
                 <div className="bg-[#121212] p-4 rounded-xl border border-slate-800 space-y-3">
                   <label className="text-xs font-semibold text-slate-400 block">Deseja parcelar ou repetir?</label>
@@ -1142,7 +1139,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <label className="text-slate-400 font-medium block mb-1">Provas</label>
-                  <select value={qtdProvasDisc} onChange={e => setQtdProvasDisc(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-800 rounded-xl p-2.5 focus:outline-none focus:border-cyan-500">
+                  <select value={qtdProvasDisc} onChange={e => setQtdProvasDisc(e.target.value)} className="w-full bg-[#121212] border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-cyan-500">
                     <option className="bg-[#1E1E1E]" value="1">1</option>
                     <option className="bg-[#1E1E1E]" value="2">2</option>
                     <option className="bg-[#1E1E1E]" value="3">3</option>
@@ -1235,7 +1232,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-slate-400 font-medium block mb-1">Categoria</label>
-                  <select value={catAgenda} onChange={e => setCatAgenda(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-800 rounded-xl p-2.5 focus:outline-none focus:border-amber-500">
+                  <select value={catAgenda} onChange={e => setCatAgenda(e.target.value)} className="w-full bg-[#121212] border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-amber-500">
                     <option className="bg-[#1E1E1E]" value="Faculdade / Prova">Faculdade / Prova</option>
                     <option className="bg-[#1E1E1E]" value="Finanças / Pagamento">Finanças / Pagamento</option>
                     <option className="bg-[#1E1E1E]" value="Trabalho">Trabalho</option>
@@ -1245,7 +1242,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <label className="text-slate-400 font-medium block mb-1">De quem é?</label>
-                  <select value={quemAgenda} onChange={e => setQuemAgenda(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-800 rounded-xl p-2.5 focus:outline-none focus:border-amber-500">
+                  <select value={quemAgenda} onChange={e => setQuemAgenda(e.target.value)} className="w-full bg-[#121212] border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-amber-500">
                     <option className="bg-[#1E1E1E]" value="Ambos">Ambos</option>
                     <option className="bg-[#1E1E1E]" value="Chamone">Chamone</option>
                     <option className="bg-[#1E1E1E]" value="Letícia">Letícia</option>
