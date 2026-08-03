@@ -47,10 +47,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [menuFabAberto, setMenuFabAberto] = useState(false);
 
-  // Filtros Finanças
+  // Filtros Finanças (Iniciando com 'Todos' para não esconder os dados passados)
   const [filtroQuem, setFiltroQuem] = useState('Todos');
   const [filtroCartao, setFiltroCartao] = useState('Todos');
-  const [filtroPeriodo, setFiltroPeriodo] = useState('MesAtual');
+  const [filtroPeriodo, setFiltroPeriodo] = useState('Todos');
   const [alunoFaculdade, setAlunoFaculdade] = useState<'Chamone' | 'Letícia'>('Chamone');
 
   // Modais
@@ -139,7 +139,6 @@ export default function Dashboard() {
     setLoading(false);
   }
 
-  // --- EXPORTAR EXCEL (.XLSX) ---
   function exportarParaExcel() {
     if (financas.length === 0 && disciplinas.length === 0) return alert('Sem dados para exportar.');
     const workbook = XLSX.utils.book_new();
@@ -190,10 +189,10 @@ export default function Dashboard() {
 
   function abrirEdicaoTransacao(f: any) {
     setIdEditandoFin(f.id);
-    setDescFin(f.descricao);
-    setValorFin(String(f.valor));
-    setTipoFin(f.tipo);
-    setCatFin(f.categoria);
+    setDescFin(f.descricao || '');
+    setValorFin(String(f.valor || 0));
+    setTipoFin(f.tipo || 'despesa');
+    setCatFin(f.categoria || 'Outros');
     setDataFin(f.data);
     setQuemFin(f.quem || 'Chamone');
     setCartaoFin(f.cartao || 'Conta Corrente / Pix');
@@ -337,7 +336,21 @@ export default function Dashboard() {
     if (confirm('Apagar evento?')) { await supabase.from('agenda').delete().eq('id', id); carregarDados(); }
   }
 
-  // --- FILTRAGEM INTELIGENTE ---
+  // --- LÓGICA DE PROTEÇÃO DE DADOS (FILTRO DE INVESTIMENTOS BLINDADO) ---
+  // Impede que dados legados sem rótulo correto quebrem o sistema
+  const isInvestimento = (f: any) => {
+    const cat = (f.categoria || '').toLowerCase();
+    const tg = (f.tipo_gasto || '').toLowerCase();
+    const desc = (f.descricao || '').toLowerCase();
+    
+    return cat.includes('investimento') || 
+           tg.includes('investimento') || 
+           desc.includes('investimento') || 
+           desc.includes('cdb') || 
+           desc.includes('xp');
+  };
+
+  // --- FILTRAGEM INTELIGENTE DE PERÍODO ---
   const financasFiltradas = financas.filter(f => {
     const passQuem = filtroQuem === 'Todos' || f.quem === filtroQuem;
     const passCartao = filtroCartao === 'Todos' || f.cartao === filtroCartao;
@@ -345,7 +358,7 @@ export default function Dashboard() {
     let passPeriodo = true;
     if (filtroPeriodo !== 'Todos' && f.data) {
       const dataGasto = new Date(f.data + 'T12:00:00');
-      const hoje = new Date();
+      const hoje = new Date(); // Considerando a data atual
       
       if (filtroPeriodo === 'MesAtual') {
         passPeriodo = dataGasto.getMonth() === hoje.getMonth() && dataGasto.getFullYear() === hoje.getFullYear();
@@ -364,25 +377,31 @@ export default function Dashboard() {
     return passQuem && passCartao && passPeriodo;
   });
 
-  // --- MATEMÁTICA FINANCEIRA CORRIGIDA ---
-  const receitas = financasFiltradas.filter(f => f.tipo === 'receita' && !f.categoria.includes('Investimento')).reduce((acc, cur) => acc + Number(cur.valor), 0);
-  const despesas = financasFiltradas.filter(f => f.tipo === 'despesa' && !f.categoria.includes('Investimento') && f.tipo_gasto !== 'Investimento').reduce((acc, cur) => acc + Number(cur.valor), 0);
-  const investimentos = financasFiltradas.filter(f => f.tipo === 'despesa' && (f.categoria.includes('Investimento') || f.tipo_gasto === 'Investimento')).reduce((acc, cur) => acc + Number(cur.valor), 0);
+  // --- MATEMÁTICA FINANCEIRA BLINDADA ---
+  // Somar Receitas (excluindo os investimentos que foram lançados como receita por acidente)
+  const receitas = financasFiltradas.filter(f => f.tipo === 'receita' && !isInvestimento(f)).reduce((acc, cur) => acc + Number(cur.valor), 0);
+  
+  // Somar Despesas (excluindo qualquer tipo de investimento)
+  const despesas = financasFiltradas.filter(f => f.tipo === 'despesa' && !isInvestimento(f)).reduce((acc, cur) => acc + Number(cur.valor), 0);
+  
+  // Somar Investimentos (Captura todos, sejam eles receitas ou despesas passadas)
+  const investimentos = financasFiltradas.filter(f => isInvestimento(f)).reduce((acc, cur) => acc + Number(cur.valor), 0);
 
   const saldoMes = receitas - despesas;
   
-  const despesasFixas = financasFiltradas.filter(f => f.tipo === 'despesa' && !f.categoria.includes('Investimento') && f.tipo_gasto === 'Fixo').reduce((acc, cur) => acc + Number(cur.valor), 0);
+  const despesasFixas = financasFiltradas.filter(f => f.tipo === 'despesa' && !isInvestimento(f) && ((f.tipo_gasto || '') === 'Fixo' || (f.descricao || '').includes('Fixo'))).reduce((acc, cur) => acc + Number(cur.valor), 0);
   const despesasVariaveis = despesas - despesasFixas;
 
   // --- PREPARAÇÃO DE DADOS PARA OS GRÁFICOS ---
-  const despesasPorCategoria = financasFiltradas.filter(f => f.tipo === 'despesa' && !f.categoria.includes('Investimento')).reduce((acc: any[], cur) => {
-    const idx = acc.findIndex(item => item.name === cur.categoria);
+  const despesasPorCategoria = financasFiltradas.filter(f => f.tipo === 'despesa' && !isInvestimento(f)).reduce((acc: any[], cur) => {
+    const nomeCategoria = cur.categoria || 'Não Categorizado';
+    const idx = acc.findIndex(item => item.name === nomeCategoria);
     if (idx >= 0) acc[idx].value += Number(cur.valor);
-    else acc.push({ name: cur.categoria, value: Number(cur.valor) });
+    else acc.push({ name: nomeCategoria, value: Number(cur.valor) });
     return acc;
   }, []);
 
-  const gastosPorCartao = financasFiltradas.filter(f => f.tipo === 'despesa' && !f.categoria.includes('Investimento')).reduce((acc: any[], cur) => {
+  const gastosPorCartao = financasFiltradas.filter(f => f.tipo === 'despesa' && !isInvestimento(f)).reduce((acc: any[], cur) => {
     const cartaoNome = cur.cartao || 'Conta Corrente / Pix';
     const idx = acc.findIndex(item => item.name === cartaoNome);
     if (idx >= 0) acc[idx].value += Number(cur.valor);
@@ -391,9 +410,9 @@ export default function Dashboard() {
   }, []);
 
   const gastosPorPessoa = [
-    { name: 'Chamone', valor: financasFiltradas.filter(f => f.tipo === 'despesa' && f.quem === 'Chamone' && !f.categoria.includes('Investimento')).reduce((a, c) => a + Number(c.valor), 0), fill: '#3B82F6' },
-    { name: 'Letícia', valor: financasFiltradas.filter(f => f.tipo === 'despesa' && f.quem === 'Letícia' && !f.categoria.includes('Investimento')).reduce((a, c) => a + Number(c.valor), 0), fill: '#D946EF' },
-    { name: 'Ambos (Casa)', valor: financasFiltradas.filter(f => f.tipo === 'despesa' && f.quem === 'Ambos' && !f.categoria.includes('Investimento')).reduce((a, c) => a + Number(c.valor), 0), fill: '#8B5CF6' }
+    { name: 'Chamone', valor: financasFiltradas.filter(f => f.tipo === 'despesa' && f.quem === 'Chamone' && !isInvestimento(f)).reduce((a, c) => a + Number(c.valor), 0), fill: '#3B82F6' },
+    { name: 'Letícia', valor: financasFiltradas.filter(f => f.tipo === 'despesa' && f.quem === 'Letícia' && !isInvestimento(f)).reduce((a, c) => a + Number(c.valor), 0), fill: '#D946EF' },
+    { name: 'Ambos (Casa)', valor: financasFiltradas.filter(f => f.tipo === 'despesa' && f.quem === 'Ambos' && !isInvestimento(f)).reduce((a, c) => a + Number(c.valor), 0), fill: '#8B5CF6' }
   ].filter(item => item.valor > 0);
 
   const fixasVsVariaveis = [
@@ -644,11 +663,11 @@ export default function Dashboard() {
                                 </td>
                                 <td className="p-3">
                                   <span className="px-2 py-1 rounded-md text-[10px] font-medium" style={{ backgroundColor: `${CORES_CATEGORIAS[f.categoria] || '#64748B'}20`, color: CORES_CATEGORIAS[f.categoria] || '#94A3B8' }}>
-                                    {f.categoria}
+                                    {f.categoria || 'Legado (Editar)'}
                                   </span>
                                 </td>
-                                <td className="p-3 text-slate-400">{f.cartao}</td>
-                                <td className="p-3 text-slate-400">{f.quem}</td>
+                                <td className="p-3 text-slate-400">{f.cartao || 'Legado (Editar)'}</td>
+                                <td className="p-3 text-slate-400">{f.quem || 'Ambos'}</td>
                                 <td className={`p-3 font-bold text-right ${f.tipo === 'receita' ? 'text-emerald-400' : 'text-slate-100'}`}>
                                   {f.tipo === 'receita' ? '+' : '-'} R$ {Number(f.valor).toFixed(2)}
                                 </td>
