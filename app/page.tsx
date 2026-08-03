@@ -32,6 +32,20 @@ const CORES_CATEGORIAS: { [key: string]: string } = {
 
 const CORES_GRAFICO = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#F97316'];
 
+const CORES_CARTOES: { [key: string]: string } = {
+  'Conta Corrente / Pix': '#10B981',
+  'Caju VA': '#EF4444',
+  'Caju VR': '#F97316',
+  'Caju Cultura': '#8B5CF6',
+  'Caju Mobilidade': '#3B82F6',
+  'VR Padrão': '#EC4899',
+  'Cartão Intercred': '#F59E0B',
+  'Cartão Nubank': '#8B5CF6',
+  'XP Investimentos': '#1E293B',
+  'Banco Inter': '#F97316',
+  'Outro': '#64748B'
+};
+
 export default function Dashboard() {
   const [sessao, setSessao] = useState<any>(null);
   const [emailLogin, setEmailLogin] = useState('');
@@ -362,7 +376,7 @@ export default function Dashboard() {
     let passPeriodo = true;
     if (filtroPeriodo !== 'Todos' && f.data) {
       const dataGasto = new Date(f.data + 'T12:00:00');
-      const hoje = new Date(); // Considerando a data atual
+      const hoje = new Date(); 
       
       if (filtroPeriodo === 'MesAtual') {
         passPeriodo = dataGasto.getMonth() === hoje.getMonth() && dataGasto.getFullYear() === hoje.getFullYear();
@@ -535,11 +549,11 @@ export default function Dashboard() {
             </h2>
             {(aba === 'financas' || aba === 'analises') && (
               <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value)} className="bg-[#1E1E1E] text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:border-emerald-500 cursor-pointer">
-                <option value="MesAtual">Mês Atual</option>
-                <option value="MesAnterior">Mês Passado</option>
-                <option value="Trimestre">Últimos 3 Meses</option>
-                <option value="Ano">Este Ano</option>
-                <option value="Todos">Todo o Histórico</option>
+                <option className="bg-[#1E1E1E] text-slate-200" value="MesAtual">Mês Atual</option>
+                <option className="bg-[#1E1E1E] text-slate-200" value="MesAnterior">Mês Passado</option>
+                <option className="bg-[#1E1E1E] text-slate-200" value="Trimestre">Últimos 3 Meses</option>
+                <option className="bg-[#1E1E1E] text-slate-200" value="Ano">Este Ano</option>
+                <option className="bg-[#1E1E1E] text-slate-200" value="Todos">Todo o Histórico</option>
               </select>
             )}
           </div>
@@ -569,32 +583,32 @@ export default function Dashboard() {
                     <div className="flex items-center gap-2">
                       <Users className="w-4 h-4 text-slate-500" />
                       <select value={filtroQuem} onChange={e => setFiltroQuem(e.target.value)} className="bg-[#1E1E1E] border border-slate-700 rounded p-1 text-sm font-medium text-slate-200 focus:outline-none cursor-pointer">
-                        <option value="Todos">Todos os Membros</option>
-                        <option value="Chamone">Chamone</option>
-                        <option value="Letícia">Letícia</option>
-                        <option value="Ambos">Ambos (Compartilhado)</option>
+                        <option className="bg-[#1E1E1E] text-slate-200" value="Todos">Todos os Membros</option>
+                        <option className="bg-[#1E1E1E] text-slate-200" value="Chamone">Chamone</option>
+                        <option className="bg-[#1E1E1E] text-slate-200" value="Letícia">Letícia</option>
+                        <option className="bg-[#1E1E1E] text-slate-200" value="Ambos">Ambos (Compartilhado)</option>
                       </select>
                     </div>
                     <div className="w-px h-6 bg-slate-700 hidden sm:block"></div>
                     <div className="flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-slate-500" />
                       <select value={filtroCartao} onChange={e => setFiltroCartao(e.target.value)} className="bg-[#1E1E1E] border border-slate-700 rounded p-1 text-sm font-medium text-slate-200 focus:outline-none cursor-pointer">
-                        <option value="Todos">Todas as Contas e Vales</option>
-                        <optgroup label="Contas Bancárias">
-                          <option value="Conta Corrente / Pix">Conta Corrente / Pix</option>
-                          <option value="XP">XP Investimentos</option>
-                          <option value="Inter">Banco Inter</option>
+                        <option className="bg-[#1E1E1E] text-slate-200" value="Todos">Todas as Contas e Vales</option>
+                        <optgroup label="Contas Bancárias" className="bg-[#1E1E1E] text-slate-400">
+                          <option className="text-slate-100" value="Conta Corrente / Pix">Conta Corrente / Pix</option>
+                          <option className="text-slate-100" value="XP">XP Investimentos</option>
+                          <option className="text-slate-100" value="Inter">Banco Inter</option>
                         </optgroup>
-                        <optgroup label="Cartões de Crédito">
-                          <option value="Cartão Intercred">Cartão Intercred</option>
-                          <option value="Cartão Nubank">Cartão Nubank</option>
+                        <optgroup label="Cartões de Crédito" className="bg-[#1E1E1E] text-slate-400">
+                          <option className="text-slate-100" value="Cartão Intercred">Cartão Intercred</option>
+                          <option className="text-slate-100" value="Cartão Nubank">Cartão Nubank</option>
                         </optgroup>
-                        <optgroup label="Vales Benefício">
-                          <option value="Caju VA">Caju (Alimentação)</option>
-                          <option value="Caju VR">Caju (Refeição)</option>
-                          <option value="Caju Cultura">Caju (Cultura/Saúde)</option>
-                          <option value="Caju Mobilidade">Caju (Mobilidade)</option>
-                          <option value="VR Padrão">VR Padrão</option>
+                        <optgroup label="Vales Benefício" className="bg-[#1E1E1E] text-slate-400">
+                          <option className="text-slate-100" value="Caju VA">Caju (Alimentação)</option>
+                          <option className="text-slate-100" value="Caju VR">Caju (Refeição)</option>
+                          <option className="text-slate-100" value="Caju Cultura">Caju (Cultura/Saúde)</option>
+                          <option className="text-slate-100" value="Caju Mobilidade">Caju (Mobilidade)</option>
+                          <option className="text-slate-100" value="VR Padrão">VR Padrão</option>
                         </optgroup>
                       </select>
                     </div>
@@ -1028,17 +1042,17 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-400 block mb-1">Categoria</label>
-                  <select value={catFin} onChange={e => setCatFin(e.target.value)} className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
-                    <option className="bg-[#1E1E1E]" value="Alimentação / Mercado">Alimentação / Mercado</option>
-                    <option className="bg-[#1E1E1E]" value="FastFood / iFood">FastFood / iFood</option>
-                    <option className="bg-[#1E1E1E]" value="Moradia / Aluguel">Moradia / Aluguel</option>
-                    <option className="bg-[#1E1E1E]" value="Transporte / Uber">Transporte / Uber</option>
-                    <option className="bg-[#1E1E1E]" value="Assinaturas / Streaming">Assinaturas / Streaming</option>
-                    <option className="bg-[#1E1E1E]" value="Saúde / Farmácia">Saúde / Farmácia</option>
-                    <option className="bg-[#1E1E1E]" value="Lazer / Passeio">Lazer / Passeio</option>
-                    <option className="bg-[#1E1E1E]" value="Investimentos (CDB/XP)">Investimentos (CDB/XP)</option>
-                    <option className="bg-[#1E1E1E]" value="Salário / Renda">Salário / Renda</option>
-                    <option className="bg-[#1E1E1E]" value="Outros">Outros</option>
+                  <select value={catFin} onChange={e => setCatFin(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-700 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500">
+                    <option className="bg-[#1E1E1E] text-slate-200" value="Alimentação / Mercado">Alimentação / Mercado</option>
+                    <option className="bg-[#1E1E1E] text-slate-200" value="FastFood / iFood">FastFood / iFood</option>
+                    <option className="bg-[#1E1E1E] text-slate-200" value="Moradia / Aluguel">Moradia / Aluguel</option>
+                    <option className="bg-[#1E1E1E] text-slate-200" value="Transporte / Uber">Transporte / Uber</option>
+                    <option className="bg-[#1E1E1E] text-slate-200" value="Assinaturas / Streaming">Assinaturas / Streaming</option>
+                    <option className="bg-[#1E1E1E] text-slate-200" value="Saúde / Farmácia">Saúde / Farmácia</option>
+                    <option className="bg-[#1E1E1E] text-slate-200" value="Lazer / Passeio">Lazer / Passeio</option>
+                    <option className="bg-[#1E1E1E] text-slate-200" value="Investimentos (CDB/XP)">Investimentos (CDB/XP)</option>
+                    <option className="bg-[#1E1E1E] text-slate-200" value="Salário / Renda">Salário / Renda</option>
+                    <option className="bg-[#1E1E1E] text-slate-200" value="Outros">Outros</option>
                   </select>
                 </div>
                 <div>
@@ -1050,11 +1064,11 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-400 block mb-1">{tipoFin === 'receita' ? 'Onde Caiu?' : 'Cartão / Forma'}</label>
-                  <select value={cartaoFin} onChange={e => setCartaoFin(e.target.value)} className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                  <select value={cartaoFin} onChange={e => setCartaoFin(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-700 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500">
                     <optgroup label="Contas" className="bg-[#1E1E1E]">
                       <option value="Conta Corrente / Pix">Conta Corrente / Pix</option>
-                      <option value="XP">XP Investimentos</option>
-                      <option value="Inter">Banco Inter</option>
+                      <option value="XP Investimentos">XP Investimentos</option>
+                      <option value="Banco Inter">Banco Inter</option>
                     </optgroup>
                     <optgroup label="Cartões de Crédito" className="bg-[#1E1E1E]">
                       <option value="Cartão Intercred">Cartão Intercred</option>
@@ -1071,7 +1085,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-400 block mb-1">{tipoFin === 'receita' ? 'Quem Recebeu?' : 'Quem Pagou?'}</label>
-                  <select value={quemFin} onChange={e => setQuemFin(e.target.value)} className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                  <select value={quemFin} onChange={e => setQuemFin(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-700 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500">
                     <option className="bg-[#1E1E1E]" value="Chamone">Chamone</option>
                     <option className="bg-[#1E1E1E]" value="Letícia">Letícia</option>
                     <option className="bg-[#1E1E1E]" value="Ambos">Ambos (Casal)</option>
@@ -1081,7 +1095,7 @@ export default function Dashboard() {
 
               <div>
                 <label className="text-xs font-semibold text-slate-400 block mb-1">Classificação do Lançamento</label>
-                <select value={tipoGastoFin} onChange={e => setTipoGastoFin(e.target.value)} className="w-full bg-[#121212] border border-slate-700 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                <select value={tipoGastoFin} onChange={e => setTipoGastoFin(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-700 rounded-xl p-3 text-sm focus:outline-none focus:border-emerald-500">
                   <option className="bg-[#1E1E1E]" value="Variável">Variável / Esporádico</option>
                   <option className="bg-[#1E1E1E]" value="Fixo">Fixo / Recorrente mensalmente</option>
                   <option className="bg-[#1E1E1E]" value="Investimento">Investimento</option>
@@ -1232,7 +1246,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-slate-400 font-medium block mb-1">Categoria</label>
-                  <select value={catAgenda} onChange={e => setCatAgenda(e.target.value)} className="w-full bg-[#121212] border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-amber-500">
+                  <select value={catAgenda} onChange={e => setCatAgenda(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-800 rounded-xl p-2.5 focus:outline-none focus:border-amber-500">
                     <option className="bg-[#1E1E1E]" value="Faculdade / Prova">Faculdade / Prova</option>
                     <option className="bg-[#1E1E1E]" value="Finanças / Pagamento">Finanças / Pagamento</option>
                     <option className="bg-[#1E1E1E]" value="Trabalho">Trabalho</option>
@@ -1242,7 +1256,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <label className="text-slate-400 font-medium block mb-1">De quem é?</label>
-                  <select value={quemAgenda} onChange={e => setQuemAgenda(e.target.value)} className="w-full bg-[#121212] border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-amber-500">
+                  <select value={quemAgenda} onChange={e => setQuemAgenda(e.target.value)} className="w-full bg-[#121212] text-slate-100 border border-slate-800 rounded-xl p-2.5 focus:outline-none focus:border-amber-500">
                     <option className="bg-[#1E1E1E]" value="Ambos">Ambos</option>
                     <option className="bg-[#1E1E1E]" value="Chamone">Chamone</option>
                     <option className="bg-[#1E1E1E]" value="Letícia">Letícia</option>
