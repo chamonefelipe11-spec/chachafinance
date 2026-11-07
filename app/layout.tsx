@@ -1,20 +1,19 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+// Fontes empacotadas no próprio app (não dependem do Google Fonts no build)
+import "@fontsource-variable/geist";
+import "@fontsource-variable/bricolage-grotesque";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "Central de Controle • Chamone & Letícia",
-  description: "Gestão inteligente de finanças pessoais, vida acadêmica e agenda do casal.",
+  title: "chachafinance",
+  description: "Finanças, faculdade e agenda do Chamone e da Letícia.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#15171d",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -23,11 +22,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="pt-BR" className="h-full antialiased">
+      <body className="min-h-full font-sans">{children}</body>
     </html>
   );
 }

@@ -1,6 +1,138 @@
 @import "tailwindcss";
 
+/* Paleta: grafite azulado, texto cor de papel, cada pessoa com sua cor. */
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "Geist Variable", ui-sans-serif, sans-serif;
+
+  --color-fundo: #15171d;
+  --color-painel: #1b1e25;
+  --color-elevado: #232731;
+  --color-campo: #12141a;
+  --color-linha: #2b303b;
+  --color-linha-suave: #22262f;
+  --color-texto: #ece8df;
+  --color-suave: #a1a7b3;
+  --color-fraco: #6f7685;
+  --color-papel: #ece6d8;
+
+  --color-entrada: #7ddba3;
+  --color-saida: #f08a7e;
+  --color-investe: #6fc3e8;
+  --color-alerta: #e9b65c;
+
+  --color-chamone: #4f8fe8;
+  --color-leticia: #d46a96;
+  --color-ambos: #b38a2e;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-fundo);
+  color: var(--color-texto);
+}
+
+body {
+  font-feature-settings: "ss01", "cv11";
+  -webkit-tap-highlight-color: transparent;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-papel);
+  outline-offset: 2px;
+}
+
+/* Campos de texto já mostram o foco pela borda */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: #6b7487 !important;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  cursor: pointer;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+select option,
+select optgroup {
+  background: var(--color-painel);
+  color: var(--color-texto);
+}
+
+/* Barra de rolagem discreta */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2f3440 transparent;
+}
+
+.sem-barra {
+  scrollbar-width: none;
+}
+.sem-barra::-webkit-scrollbar {
+  display: none;
+}
+
+/* Abertura de folhas/modais: a única animação "própria" do app */
+@keyframes subir {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes surgir {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.anim-folha {
+  animation: subir 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.anim-fundo {
+  animation: surgir 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+.pb-seguro {
+  padding-bottom: env(safe-area-inset-bottom);
 }

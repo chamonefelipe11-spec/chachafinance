@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# chachafinance
 
-## Getting Started
+Finanças, faculdade e agenda do Chamone e da Letícia. Next.js 16 + Supabase.
 
-First, run the development server:
+## Atualizando para a v2
+
+1. **Rode a migração no Supabase.** Abra *SQL Editor*, cole o conteúdo de
+   [`supabase/migracao.sql`](supabase/migracao.sql) e clique em **Run**. Ela só
+   adiciona coisas (tabelas `contas`, `categorias`, `metas`, `acertos`,
+   `faturas_pagas` e duas colunas em `financas`); nenhum dado existente é apagado.
+   Pode rodar de novo sem problema.
+2. **Desligue o cadastro público** em *Authentication → Sign In / Providers →
+   Allow new users to sign up*. A tela de “criar conta” saiu do app, mas o
+   Supabase ainda aceitaria cadastros pela API, e qualquer usuário logado
+   enxerga os dados.
+3. **Configure os cartões** no app, em *Contas e categorias*: informe o dia de
+   fechamento e de vencimento do Nubank e do Intercred (e o limite, se quiser).
+4. `npm install` e publique como antes.
+
+Sem a migração o app continua abrindo com a lista padrão de contas e categorias,
+mas cartões, orçamento, metas e acerto ficam indisponíveis (aparece um aviso).
+
+## Rodando localmente
 
 ```bash
+cp .env.example .env.local   # preencha URL e chave anon do Supabase
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Atalho no computador: tecla **n** abre um novo lançamento.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Estrutura
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+app/page.tsx            login, carregamento e navegação
+app/globals.css         paleta (grafite, papel, cor de cada pessoa)
+components/             Shell (menu), ui (botões, campos, folhas), formulários
+views/                  uma tela por seção
+lib/finance.ts          contas: resumo do mês, faturas, acerto do casal, notas
+lib/store.ts            leitura/escrita no Supabase
+lib/format.ts           dinheiro e datas (sempre no fuso local)
+supabase/migracao.sql   tabelas novas
+```
 
-## Learn More
+## Regras de cálculo
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Investimentos** são reconhecidos pela categoria (tipo “investimento”) ou pela
+  classificação “Investimento”. Não ficam no saldo do mês; aparecem como aporte.
+- **Fatura**: compras a partir do dia de fechamento caem na fatura do mês seguinte.
+  Parcelas futuras já entram nas próximas faturas.
+- **Acerto do casal**: despesa paga por um com “Dividir com…” ligado gera dívida
+  do outro na porcentagem escolhida. Gastos da conta conjunta não geram dívida.
+- **Parcelas e recorrências** guardam um `grupo_id`; dá para editar ou apagar
+  “este e os próximos” ou a série inteira.
+- **Faculdade**: nota em branco = prova pendente. O app calcula quanto falta para
+  60 (aprovação) e 40 (exame especial).
