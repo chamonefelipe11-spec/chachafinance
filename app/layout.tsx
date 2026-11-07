@@ -7,6 +7,13 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "chachafinance",
   description: "Finanças, faculdade e agenda do Chamone e da Letícia.",
+  applicationName: "chachafinance",
+  appleWebApp: {
+    capable: true,
+    title: "chacha",
+    statusBarStyle: "black-translucent",
+  },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {

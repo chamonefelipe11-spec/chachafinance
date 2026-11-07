@@ -1,10 +1,24 @@
-'use client';
+"use client";
 
-import { useCallback, useState } from 'react';
-import { supabase } from './supabase';
-import { CATEGORIAS_PADRAO, CONTAS_PADRAO } from './defaults';
-import type { Acerto, Categoria, Conta, Disciplina, Evento, FaturaPaga, Meta, Transacao } from './types';
-import { avisar } from './toast';
+import { useCallback, useState } from "react";
+import { supabase } from "./supabase";
+import { CATEGORIAS_PADRAO, CONTAS_PADRAO } from "./defaults";
+import type {
+  Acerto,
+  Aula,
+  Categoria,
+  Conta,
+  Disciplina,
+  Evento,
+  FaturaPaga,
+  Importacao,
+  Meta,
+  Presenca,
+  Recorrencia,
+  Regra,
+  Transacao,
+} from "./types";
+import { avisar } from "./toast";
 
 export interface Dados {
   transacoes: Transacao[];
@@ -15,6 +29,11 @@ export interface Dados {
   faturasPagas: FaturaPaga[];
   disciplinas: Disciplina[];
   eventos: Evento[];
+  recorrencias: Recorrencia[];
+  regras: Regra[];
+  importacoes: Importacao[];
+  aulas: Aula[];
+  presencas: Presenca[];
 }
 
 const VAZIO: Dados = {
@@ -26,30 +45,72 @@ const VAZIO: Dados = {
   faturasPagas: [],
   disciplinas: [],
   eventos: [],
+  recorrencias: [],
+  regras: [],
+  importacoes: [],
+  aulas: [],
+  presencas: [],
 };
 
-const num = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number(v));
+const num = (v: unknown) =>
+  v === null || v === undefined || v === "" ? null : Number(v);
 
 function normalizarTransacao(t: Record<string, unknown>): Transacao {
+  const tipo =
+    t.tipo === "receita" || t.tipo === "transferencia" ? t.tipo : "despesa";
   return {
     ...(t as unknown as Transacao),
     id: String(t.id),
     valor: Number(t.valor) || 0,
-    descricao: (t.descricao as string) || (t.categoria as string) || 'Sem descrição',
-    categoria: (t.categoria as string) || 'Outros',
-    cartao: (t.cartao as string) || 'Conta Corrente / Pix',
-    quem: ((t.quem as string) || 'Ambos') as Transacao['quem'],
-    tipo: t.tipo === 'receita' ? 'receita' : 'despesa',
-    tipo_gasto: (t.tipo_gasto as string) || 'Variável',
+    descricao:
+      (t.descricao as string) || (t.categoria as string) || "Sem descrição",
+    categoria:
+      (t.categoria as string) ||
+      (tipo === "transferencia" ? "Transferência" : "Outros"),
+    cartao: (t.cartao as string) || "Conta Corrente / Pix",
+    quem: ((t.quem as string) || "Ambos") as Transacao["quem"],
+    tipo,
+    tipo_gasto: (t.tipo_gasto as string) || "Variável",
     parcela_atual: num(t.parcela_atual),
     total_parcelas: num(t.total_parcelas),
     divisao_pct: num(t.divisao_pct),
+    status: t.status === "previsto" ? "previsto" : "pago",
   };
 }
 
-/** Tabelas criadas pelo arquivo supabase/migracao.sql. */
-export const TABELAS_NOVAS = ['contas', 'categorias', 'metas', 'acertos', 'faturas_pagas'] as const;
-const COLUNAS_NOVAS = ['grupo_id', 'divisao_pct'];
+/** Todas as tabelas que vieram depois da v1 (criadas pelos arquivos em supabase/). */
+export const TABELAS_NOVAS = [
+  "contas",
+  "categorias",
+  "metas",
+  "acertos",
+  "faturas_pagas",
+  "recorrencias",
+  "regras",
+  "importacoes",
+  "aulas",
+  "presencas",
+] as const;
+
+/** Lê a tabela inteira, de 1000 em 1000 (o Supabase devolve no máximo 1000 linhas por pedido). */
+export async function lerTudo<T>(
+  tabela: string,
+  ordem?: { coluna: string; crescente?: boolean },
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const todos: T[] = [];
+  const passo = 1000;
+  for (let de = 0; de < 200_000; de += passo) {
+    let q = supabase.from(tabela).select("*");
+    if (ordem)
+      q = q.order(ordem.coluna, { ascending: ordem.crescente ?? true });
+    q = q.order("id", { ascending: true }).range(de, de + passo - 1);
+    const { data, error } = await q;
+    if (error) return { data: todos, error };
+    todos.push(...((data as T[]) || []));
+    if (!data || data.length < passo) break;
+  }
+  return { data: todos, error: null };
+}
 
 export function useDados() {
   const [dados, setDados] = useState<Dados>(VAZIO);
@@ -58,38 +119,119 @@ export function useDados() {
 
   const carregar = useCallback(async (silencioso = false) => {
     if (!silencioso) setCarregando(true);
-    const [fin, disc, ag, contas, cats, metas, acertos, pagas] = await Promise.all([
-      supabase.from('financas').select('*').order('data', { ascending: false }),
-      supabase.from('disciplinas').select('*').order('created_at', { ascending: false }),
-      supabase.from('agenda').select('*').order('data', { ascending: true }),
-      supabase.from('contas').select('*').order('ordem'),
-      supabase.from('categorias').select('*').order('ordem'),
-      supabase.from('metas').select('*').order('created_at'),
-      supabase.from('acertos').select('*').order('data', { ascending: false }),
-      supabase.from('faturas_pagas').select('*'),
+    const [
+      fin,
+      disc,
+      ag,
+      contas,
+      cats,
+      metas,
+      acertos,
+      pagas,
+      recs,
+      regras,
+      imps,
+      aulas,
+      pres,
+    ] = await Promise.all([
+      lerTudo<Record<string, unknown>>("financas", {
+        coluna: "data",
+        crescente: false,
+      }),
+      lerTudo<Disciplina>("disciplinas", {
+        coluna: "created_at",
+        crescente: false,
+      }),
+      lerTudo<Evento>("agenda", { coluna: "data" }),
+      lerTudo<Conta>("contas", { coluna: "ordem" }),
+      lerTudo<Categoria>("categorias", { coluna: "ordem" }),
+      lerTudo<Meta>("metas", { coluna: "created_at" }),
+      lerTudo<Acerto>("acertos", { coluna: "data", crescente: false }),
+      lerTudo<FaturaPaga>("faturas_pagas"),
+      lerTudo<Recorrencia>("recorrencias", { coluna: "dia" }),
+      lerTudo<Regra>("regras", { coluna: "ordem" }),
+      lerTudo<Importacao>("importacoes", {
+        coluna: "created_at",
+        crescente: false,
+      }),
+      lerTudo<Aula>("aulas", { coluna: "dia_semana" }),
+      lerTudo<Presenca>("presencas", { coluna: "data", crescente: false }),
     ]);
 
     const falta: string[] = [];
-    const opcional = <T,>(nome: string, r: { data: unknown; error: unknown }, padrao: T[]): T[] => {
+    const opcional = <T>(
+      nome: string,
+      r: { data: T[]; error: unknown },
+      padrao: T[] = [],
+    ): T[] => {
       if (r.error) {
         falta.push(nome);
         return padrao;
       }
-      const lista = (r.data as T[]) || [];
-      return lista.length ? lista : padrao;
+      return r.data.length ? r.data : padrao;
     };
 
-    if (fin.error) avisar(`Não consegui ler os lançamentos: ${fin.error.message}`, 'erro');
+    if (fin.error)
+      avisar(`Não consegui ler os lançamentos: ${fin.error.message}`, "erro");
+    const id = <T extends { id: unknown }>(x: T) => ({
+      ...x,
+      id: String(x.id),
+    });
 
     setDados({
-      transacoes: ((fin.data as Record<string, unknown>[]) || []).map(normalizarTransacao),
-      disciplinas: ((disc.data as Disciplina[]) || []).map((d) => ({ ...d, id: String(d.id) })),
-      eventos: ((ag.data as Evento[]) || []).map((e) => ({ ...e, id: String(e.id) })),
-      contas: opcional<Conta>('contas', contas, CONTAS_PADRAO).map((c) => ({ ...c, id: String(c.id), limite: num(c.limite) })),
-      categorias: opcional<Categoria>('categorias', cats, CATEGORIAS_PADRAO).map((c) => ({ ...c, id: String(c.id), orcamento: num(c.orcamento) })),
-      metas: opcional<Meta>('metas', metas, []).map((m) => ({ ...m, id: String(m.id), valor_alvo: Number(m.valor_alvo), valor_atual: Number(m.valor_atual) })),
-      acertos: opcional<Acerto>('acertos', acertos, []).map((a) => ({ ...a, id: String(a.id), valor: Number(a.valor) })),
-      faturasPagas: opcional<FaturaPaga>('faturas_pagas', pagas, []).map((p) => ({ ...p, id: String(p.id), valor: Number(p.valor) })),
+      transacoes: fin.data
+        .map(normalizarTransacao)
+        .sort((a, b) => b.data.localeCompare(a.data)),
+      disciplinas: disc.data.map(id),
+      eventos: ag.data.map(id),
+      contas: opcional("contas", contas, CONTAS_PADRAO).map((c) => ({
+        ...id(c),
+        limite: num(c.limite),
+        saldo_inicial: num(c.saldo_inicial),
+      })),
+      categorias: opcional("categorias", cats, CATEGORIAS_PADRAO).map((c) => ({
+        ...id(c),
+        orcamento: num(c.orcamento),
+      })),
+      metas: opcional("metas", metas).map((m) => ({
+        ...id(m),
+        valor_alvo: Number(m.valor_alvo),
+        valor_atual: Number(m.valor_atual),
+      })),
+      acertos: opcional("acertos", acertos).map((a) => ({
+        ...id(a),
+        valor: Number(a.valor),
+      })),
+      faturasPagas: opcional("faturas_pagas", pagas).map((p) => ({
+        ...id(p),
+        valor: Number(p.valor),
+      })),
+      recorrencias: opcional("recorrencias", recs).map((r) => ({
+        ...id(r),
+        valor: Number(r.valor),
+        divisao_pct: num(r.divisao_pct),
+        dia: Number(r.dia),
+      })),
+      regras: opcional("regras", regras).map((r) => ({
+        ...id(r),
+        divisao_pct: num(r.divisao_pct),
+      })),
+      importacoes: opcional("importacoes", imps)
+        .map(id)
+        .sort((a, b) =>
+          String(b.created_at).localeCompare(String(a.created_at)),
+        ),
+      aulas: opcional("aulas", aulas).map((a) => ({
+        ...id(a),
+        disciplina_id: String(a.disciplina_id),
+        dia_semana: Number(a.dia_semana),
+        peso: Number(a.peso) || 1,
+      })),
+      presencas: opcional("presencas", pres).map((p) => ({
+        ...id(p),
+        disciplina_id: String(p.disciplina_id),
+        peso: Number(p.peso) || 1,
+      })),
     });
     setFaltando(falta);
     setCarregando(false);
@@ -104,55 +246,125 @@ export function useDados() {
 
 type Linha = Record<string, unknown>;
 
-function semColunasNovas(linhas: Linha[]): Linha[] {
-  return linhas.map((l) => {
-    const c = { ...l };
-    for (const k of COLUNAS_NOVAS) delete c[k];
-    return c;
-  });
+/** Nome da coluna que o Supabase diz não existir (banco ainda sem a migração mais nova). */
+function colunaInexistente(msg: string): string | null {
+  const m =
+    msg.match(/Could not find the '([^']+)' column/i) ||
+    msg.match(/column "?([a-z_]+)"? of relation .* does not exist/i);
+  return m ? m[1] : null;
 }
-
-const erroDeColuna = (msg: string) => COLUNAS_NOVAS.some((c) => msg.includes(c));
-const erroDeTabela = (msg: string) => /does not exist|Could not find the table|schema cache/i.test(msg);
+const erroDeTabela = (msg: string) =>
+  /relation .* does not exist|Could not find the table/i.test(msg);
 
 function tratarErro(tabela: string, msg: string) {
-  if (erroDeTabela(msg)) avisar(`A tabela "${tabela}" ainda não existe. Rode o arquivo supabase/migracao.sql no Supabase.`, 'erro');
-  else avisar(`Não foi possível salvar: ${msg}`, 'erro');
+  if (erroDeTabela(msg))
+    avisar(
+      `A tabela "${tabela}" ainda não existe. Rode o SQL mais novo da pasta supabase/ no Supabase.`,
+      "erro",
+    );
+  else avisar(`Não foi possível salvar: ${msg}`, "erro");
+}
+
+const semColuna = (linhas: Linha[], col: string) =>
+  linhas.map((l) => {
+    const c = { ...l };
+    delete c[col];
+    return c;
+  });
+
+/** Repete a operação removendo colunas que o banco ainda não tem (até 6 vezes). */
+async function tentar(
+  tabela: string,
+  linhas: Linha[],
+  fazer: (l: Linha[]) => PromiseLike<{ error: { message: string } | null }>,
+): Promise<boolean> {
+  let atual = linhas;
+  const tiradas: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const { error } = await fazer(atual);
+    if (!error) {
+      if (tiradas.length)
+        avisar(
+          `Salvo sem ${tiradas.join(", ")}: rode o SQL mais novo no Supabase para usar tudo.`,
+          "aviso",
+        );
+      return true;
+    }
+    const col = colunaInexistente(error.message);
+    if (!col || !atual.some((l) => col in l)) {
+      tratarErro(tabela, error.message);
+      return false;
+    }
+    tiradas.push(col);
+    atual = semColuna(atual, col);
+  }
+  return false;
 }
 
 export const db = {
-  async inserir(tabela: string, linhas: Linha | Linha[]): Promise<boolean> {
-    let lista = Array.isArray(linhas) ? linhas : [linhas];
-    let { error } = await supabase.from(tabela).insert(lista);
-    if (error && tabela === 'financas' && erroDeColuna(error.message)) {
-      lista = semColunasNovas(lista);
-      ({ error } = await supabase.from(tabela).insert(lista));
-      if (!error) avisar('Salvo, mas sem divisão/agrupamento de parcelas: rode a migração do Supabase.', 'aviso');
-    }
-    if (error) tratarErro(tabela, error.message);
-    return !error;
+  inserir(tabela: string, linhas: Linha | Linha[]): Promise<boolean> {
+    const lista = Array.isArray(linhas) ? linhas : [linhas];
+    return tentar(tabela, lista, (l) => supabase.from(tabela).insert(l));
   },
 
-  async atualizar(tabela: string, ids: string | string[], valores: Linha): Promise<boolean> {
+  /** Insere e devolve as linhas criadas (com id). */
+  async inserirDevolvendo<T>(
+    tabela: string,
+    linhas: Linha | Linha[],
+  ): Promise<T[] | null> {
+    const lista = Array.isArray(linhas) ? linhas : [linhas];
+    let criadas: T[] | null = null;
+    const ok = await tentar(tabela, lista, async (l) => {
+      const r = await supabase.from(tabela).insert(l).select();
+      criadas = (r.data as T[]) || null;
+      return r;
+    });
+    return ok ? criadas || [] : null;
+  },
+
+  upsert(tabela: string, linhas: Linha[], onConflict = "id"): Promise<boolean> {
+    return tentar(tabela, linhas, (l) =>
+      supabase.from(tabela).upsert(l, { onConflict }),
+    );
+  },
+
+  atualizar(
+    tabela: string,
+    ids: string | string[],
+    valores: Linha,
+  ): Promise<boolean> {
     const lista = Array.isArray(ids) ? ids : [ids];
-    let { error } = await supabase.from(tabela).update(valores).in('id', lista);
-    if (error && tabela === 'financas' && erroDeColuna(error.message)) {
-      ({ error } = await supabase.from(tabela).update(semColunasNovas([valores])[0]).in('id', lista));
-    }
-    if (error) tratarErro(tabela, error.message);
-    return !error;
+    return tentar(tabela, [valores], (l) =>
+      supabase.from(tabela).update(l[0]).in("id", lista),
+    );
   },
 
-  async atualizarOnde(tabela: string, coluna: string, valorAtual: string, valores: Linha): Promise<boolean> {
-    const { error } = await supabase.from(tabela).update(valores).eq(coluna, valorAtual);
+  async atualizarOnde(
+    tabela: string,
+    coluna: string,
+    valorAtual: string,
+    valores: Linha,
+  ): Promise<boolean> {
+    const { error } = await supabase
+      .from(tabela)
+      .update(valores)
+      .eq(coluna, valorAtual);
     if (error) tratarErro(tabela, error.message);
     return !error;
   },
 
   async remover(tabela: string, ids: string | string[]): Promise<boolean> {
     const lista = Array.isArray(ids) ? ids : [ids];
-    const { error } = await supabase.from(tabela).delete().in('id', lista);
-    if (error) tratarErro(tabela, error.message);
-    return !error;
+    for (let i = 0; i < lista.length; i += 200) {
+      const { error } = await supabase
+        .from(tabela)
+        .delete()
+        .in("id", lista.slice(i, i + 200));
+      if (error) {
+        tratarErro(tabela, error.message);
+        return false;
+      }
+    }
+    return true;
   },
 };

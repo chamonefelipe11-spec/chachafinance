@@ -1,4 +1,4 @@
-export type TipoAviso = 'ok' | 'erro' | 'aviso';
+export type TipoAviso = "ok" | "erro" | "aviso";
 export interface Aviso {
   id: number;
   texto: string;
@@ -9,7 +9,7 @@ type Ouvinte = (a: Aviso) => void;
 const ouvintes = new Set<Ouvinte>();
 let seq = 0;
 
-export function avisar(texto: string, tipo: TipoAviso = 'ok') {
+export function avisar(texto: string, tipo: TipoAviso = "ok") {
   const a = { id: ++seq, texto, tipo };
   ouvintes.forEach((o) => o(a));
 }

@@ -1,9 +1,10 @@
-export const PESSOAS = ['Chamone', 'Letícia'] as const;
+export const PESSOAS = ["Chamone", "Letícia"] as const;
 export type Pessoa = (typeof PESSOAS)[number];
-export type Quem = Pessoa | 'Ambos';
+export type Quem = Pessoa | "Ambos";
 
-export type TipoTransacao = 'despesa' | 'receita';
-export type TipoGasto = 'Fixo' | 'Variável' | 'Investimento';
+export type TipoTransacao = "despesa" | "receita" | "transferencia";
+export type StatusTransacao = "pago" | "previsto";
+export type TipoGasto = "Fixo" | "Variável" | "Investimento";
 
 export interface Transacao {
   id: string;
@@ -20,10 +21,18 @@ export interface Transacao {
   grupo_id?: string | null;
   /** % da despesa que cabe à outra pessoa (acerto do casal). null = não dividida */
   divisao_pct?: number | null;
+  /** Transferência: conta que recebe */
+  conta_destino?: string | null;
+  /** Contas fixas: 'previsto' até ser marcada como paga */
+  status?: StatusTransacao | null;
+  recorrencia_id?: string | null;
+  competencia?: string | null;
+  import_hash?: string | null;
+  importacao_id?: string | null;
   created_at?: string;
 }
 
-export type TipoConta = 'corrente' | 'credito' | 'beneficio' | 'investimento';
+export type TipoConta = "corrente" | "credito" | "beneficio" | "investimento";
 
 export interface Conta {
   id: string;
@@ -35,9 +44,11 @@ export interface Conta {
   limite: number | null;
   ativo: boolean;
   ordem: number;
+  saldo_inicial?: number | null;
+  saldo_inicial_em?: string | null;
 }
 
-export type TipoCategoria = 'despesa' | 'receita' | 'investimento';
+export type TipoCategoria = "despesa" | "receita" | "investimento";
 
 export interface Categoria {
   id: string;
@@ -75,6 +86,7 @@ export interface FaturaPaga {
   referencia: string; // YYYY-MM (mês de fechamento)
   pago_em: string;
   valor: number;
+  transacao_id?: string | null;
 }
 
 export interface Disciplina {
@@ -91,7 +103,74 @@ export interface Disciplina {
   peso_p3: number | null;
   faltas: number;
   max_faltas: number;
+  carga_horaria?: number | null;
+  data_p1?: string | null;
+  data_p2?: string | null;
+  data_p3?: string | null;
   created_at?: string;
+}
+
+export interface Recorrencia {
+  id: string;
+  descricao: string;
+  valor: number;
+  tipo: TipoTransacao;
+  categoria: string;
+  cartao: string;
+  quem: Quem;
+  divisao_pct: number | null;
+  dia: number;
+  inicio: string; // YYYY-MM
+  fim: string | null; // YYYY-MM
+  ativo: boolean;
+}
+
+export interface Importacao {
+  id: string;
+  origem: string;
+  conta: string;
+  arquivo: string | null;
+  qtd: number;
+  created_at: string;
+}
+
+export interface Regra {
+  id: string;
+  contem: string;
+  categoria: string | null;
+  quem: Quem | null;
+  divisao_pct: number | null;
+  transferir_para: string | null;
+  ignorar: boolean;
+  ordem: number;
+}
+
+export interface Aula {
+  id: string;
+  disciplina_id: string;
+  dia_semana: number; // 0 = domingo
+  inicio: string; // HH:MM
+  fim: string;
+  sala: string | null;
+  peso: number; // faltas que um encontro vale
+}
+
+export interface Presenca {
+  id: string;
+  disciplina_id: string;
+  aula_id: string | null;
+  data: string;
+  presente: boolean;
+  peso: number;
+}
+
+export interface AvisoConfig {
+  email: string;
+  pessoa: Pessoa | null;
+  push: boolean;
+  email_ativo: boolean;
+  email_destino: string | null;
+  avisos: string[];
 }
 
 export interface Evento {
@@ -105,13 +184,16 @@ export interface Evento {
 }
 
 export type Aba =
-  | 'inicio'
-  | 'lancamentos'
-  | 'cartoes'
-  | 'orcamento'
-  | 'metas'
-  | 'casal'
-  | 'analises'
-  | 'faculdade'
-  | 'agenda'
-  | 'ajustes';
+  | "inicio"
+  | "lancamentos"
+  | "cartoes"
+  | "orcamento"
+  | "metas"
+  | "casal"
+  | "analises"
+  | "faculdade"
+  | "agenda"
+  | "patrimonio"
+  | "contasfixas"
+  | "importar"
+  | "ajustes";
