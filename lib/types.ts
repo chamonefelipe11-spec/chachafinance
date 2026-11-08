@@ -123,6 +123,8 @@ export interface Recorrencia {
   inicio: string; // YYYY-MM
   fim: string | null; // YYYY-MM
   ativo: boolean;
+  /** Meses (YYYY-MM) que o casal apagou de propósito: não são recriados */
+  pulados?: string[] | null;
 }
 
 export interface Importacao {

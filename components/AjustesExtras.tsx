@@ -439,8 +439,6 @@ export function PainelAvisos() {
   const { faltando } = useApp();
   const [email, setEmail] = useState("");
   const [pessoa, setPessoa] = useState<Pessoa | "">("");
-  const [emailAtivo, setEmailAtivo] = useState(false);
-  const [destino, setDestino] = useState("");
   const [avisos, setAvisos] = useState<string[]>(TIPOS_AVISO.map((t) => t.id));
   const [push, setPush] = useState(false);
   const [aparelho, setAparelho] = useState<
@@ -462,8 +460,6 @@ export function PainelAvisos() {
         .maybeSingle();
       if (cfg) {
         setPessoa(cfg.pessoa || "");
-        setEmailAtivo(!!cfg.email_ativo);
-        setDestino(cfg.email_destino || "");
         setAvisos(cfg.avisos || []);
         setPush(!!cfg.push);
       }
@@ -492,8 +488,7 @@ export function PainelAvisos() {
           email,
           pessoa: pessoa || null,
           push: extra.push ?? push,
-          email_ativo: emailAtivo,
-          email_destino: destino.trim() || null,
+          email_ativo: false,
           avisos,
         },
       ],
@@ -659,23 +654,6 @@ export function PainelAvisos() {
               <p className="mt-2 text-xs text-fraco">
                 Ligue em cada aparelho onde quer receber.
               </p>
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-linha-suave bg-campo/60 p-4">
-            <Alternar
-              ligado={emailAtivo}
-              aoMudar={setEmailAtivo}
-              rotulo="Também por e-mail (o resumo do mês sempre vai por e-mail)"
-            />
-            {emailAtivo && (
-              <Entrada
-                className="mt-3"
-                type="email"
-                value={destino}
-                onChange={(e) => setDestino(e.target.value)}
-                placeholder={email}
-              />
             )}
           </div>
 

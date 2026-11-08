@@ -298,10 +298,19 @@ export default function TransacaoForm({
   }
 
   async function apagar(quais: Transacao[]) {
-    const ok = await db.remover(
+    let ok = await db.remover(
       "financas",
       quais.map((t) => t.id),
     );
+    // Conta fixa: o mês apagado fica marcado para não ser recriado
+    const fixas = quais.filter((t) => t.recorrencia_id && t.competencia);
+    for (const t of fixas) {
+      const rec = dados.recorrencias.find((r) => r.id === t.recorrencia_id);
+      if (ok && rec)
+        ok = await db.atualizar("recorrencias", rec.id, {
+          pulados: [...new Set([...(rec.pulados || []), t.competencia!])],
+        });
+    }
     if (ok) {
       avisar(
         quais.length > 1

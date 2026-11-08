@@ -57,6 +57,9 @@ create table if not exists public.recorrencias (
   created_at  timestamptz not null default now()
 );
 
+-- Meses de uma conta fixa que foram apagados de propósito (não são recriados)
+alter table public.recorrencias add column if not exists pulados text[] not null default '{}';
+
 -- ---------- Fase 3: importação ----------
 alter table public.financas add column if not exists import_hash   text;
 alter table public.financas add column if not exists importacao_id uuid;

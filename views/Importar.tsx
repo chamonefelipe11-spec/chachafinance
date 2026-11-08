@@ -16,7 +16,6 @@ import {
   confirmar,
   cx,
 } from "@/components/ui";
-import { supabase } from "@/lib/supabase";
 import { db } from "@/lib/store";
 import { avisar } from "@/lib/toast";
 import {
@@ -30,16 +29,16 @@ import {
 import { descricaoBase } from "@/lib/finance";
 import {
   chaveDescricao,
-  lerBase64,
   lerCSV,
-  lerData,
   lerOFX,
+  lerTextoExtrato,
   prepararLinhas,
-  reduzirImagem,
+  semRepetidosEntrePrints,
   type LinhaBruta,
   type LinhaImport,
   type TipoLinha,
 } from "@/lib/importar";
+import { textoDeImagem, textoDePDF } from "@/lib/ocr";
 import type { Quem } from "@/lib/types";
 
 type Etapa = "escolher" | "lendo" | "revisar";
@@ -55,6 +54,8 @@ export default function Importar() {
   const [linhas, setLinhas] = useState<LinhaImport[]>([]);
   const [arquivos, setArquivos] = useState<string[]>([]);
   const [observacao, setObservacao] = useState<string | null>(null);
+  const [progresso, setProgresso] = useState("");
+  const [textoLido, setTextoLido] = useState("");
   const [criarFuturas, setCriarFuturas] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [regraDe, setRegraDe] = useState<LinhaImport | null>(null);
@@ -69,6 +70,8 @@ export default function Importar() {
     const fs = [...lista];
     setArquivos(fs.map((f) => f.name));
     setObservacao(null);
+    setTextoLido("");
+    setProgresso("");
     setEtapa("lendo");
     try {
       const brutas: LinhaBruta[] = [];
@@ -92,61 +95,28 @@ export default function Importar() {
           paraIA.push(f);
       }
       if (paraIA.length) {
-        const enviados = await Promise.all(
-          paraIA.map(async (f) =>
-            f.type === "application/pdf" ||
-            f.name.toLowerCase().endsWith(".pdf")
-              ? {
-                  nome: f.name,
-                  tipo: "application/pdf",
-                  base64: await lerBase64(f),
-                }
-              : { nome: f.name, ...(await reduzirImagem(f)) },
-          ),
-        );
-        const { data: s } = await supabase.auth.getSession();
-        const r = await fetch("/api/ler-arquivo", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${s.session?.access_token || ""}`,
-          },
-          body: JSON.stringify({
-            arquivos: enviados,
-            conta: contaObj.nome,
-            tipoConta: contaObj.tipo,
-            hoje: hojeISO(),
-          }),
-        });
-        const j = await r.json().catch(() => ({ erro: `Erro ${r.status}` }));
-        if (!r.ok) throw new Error(j.erro || `Erro ${r.status}`);
-        setObservacao(j.observacao || null);
-        for (const l of j.lancamentos as {
-          data: string;
-          descricao: string;
-          valor: number;
-          direcao: string;
-          parcela_atual?: number;
-          parcela_total?: number;
-        }[]) {
-          const data = lerData(l.data);
-          if (!data || !(Number(l.valor) > 0)) continue;
-          const saida = l.direcao !== "entrada";
-          // No cartão, compra = positivo; na conta, saída = negativo (mesma convenção dos arquivos)
-          const sinal =
-            contaObj.tipo === "credito" ? (saida ? 1 : -1) : saida ? -1 : 1;
-          brutas.push({
-            data,
-            descricao: l.descricao,
-            valor: sinal * Number(l.valor),
-            parcela:
-              l.parcela_atual && l.parcela_total && l.parcela_total > 1
-                ? { atual: l.parcela_atual, total: l.parcela_total }
-                : null,
-          });
+        // Leitura no próprio aparelho: PDF pelo texto embutido (ou OCR se for escaneado), print por OCR
+        const grupos: LinhaBruta[][] = [];
+        const textos: string[] = [];
+        for (let i = 0; i < paraIA.length; i++) {
+          const f = paraIA[i];
+          const rotulo = paraIA.length > 1 ? `${f.name} (${i + 1} de ${paraIA.length})` : f.name;
+          const pdf = f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
+          setProgresso(`${rotulo}: começando…`);
+          const texto = pdf
+            ? await textoDePDF(f, (p) => setProgresso(`${rotulo}: ${p}`))
+            : await textoDeImagem(f, (p) => setProgresso(`${rotulo}: ${p}`));
+          textos.push(`— ${f.name} —\n${texto.trim()}`);
+          grupos.push(lerTextoExtrato(texto, contaObj.tipo, hojeISO()));
         }
+        setTextoLido(textos.join("\n\n"));
+        brutas.push(...semRepetidosEntrePrints(grupos));
+        if (!brutas.length)
+          setObservacao("Li o arquivo mas não reconheci lançamentos. Abra “Ver o texto lido” para conferir.");
+        else
+          setObservacao("Lido por reconhecimento de texto no seu aparelho: confira datas e valores antes de importar.");
       }
-      if (!brutas.length)
+      if (!brutas.length && !paraIA.length)
         throw new Error(
           "Não encontrei lançamentos nesses arquivos. Confira se é o extrato ou a fatura certa.",
         );
@@ -176,7 +146,7 @@ export default function Importar() {
     setLinhas((ls) =>
       ls.map((l) => (l.chave === chave ? { ...l, ...campo } : l)),
     );
-  const marcadas = linhas.filter((l) => l.incluir);
+  const marcadas = linhas.filter((l) => l.incluir && l.valor > 0 && l.descricao.trim());
   const totalSaida = marcadas
     .filter((l) => l.tipo === "despesa")
     .reduce((a, l) => a + l.valor, 0);
@@ -301,8 +271,8 @@ export default function Importar() {
           Lendo{" "}
           {arquivos.length === 1 ? arquivos[0] : `${arquivos.length} arquivos`}…
         </p>
-        <p className="text-sm text-fraco">
-          Prints e PDFs levam alguns segundos.
+        <p className="num text-sm text-fraco">
+          {progresso || "Prints levam alguns segundos; a primeira leitura baixa o leitor (uns 5 MB)."}
         </p>
       </div>
     );
@@ -324,6 +294,12 @@ export default function Importar() {
           <p className="rounded-xl border border-alerta/30 bg-alerta/8 px-4 py-3 text-sm">
             {observacao}
           </p>
+        )}
+        {textoLido && (
+          <details className="rounded-xl border border-linha-suave bg-painel px-4 py-3 text-sm">
+            <summary className="cursor-pointer text-suave">Ver o texto lido</summary>
+            <pre className="mt-3 max-h-80 overflow-auto text-xs whitespace-pre-wrap text-fraco">{textoLido}</pre>
+          </details>
         )}
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-suave">
@@ -361,6 +337,33 @@ export default function Importar() {
             />
           ))}
         </ul>
+        <Botao
+          tamanho="sm"
+          onClick={() =>
+            setLinhas((ls) => [
+              {
+                chave: `manual-${Date.now()}`,
+                incluir: true,
+                data: hojeISO(),
+                descricao: "",
+                valor: 0,
+                tipo: "despesa",
+                categoria: "Outros",
+                quem: pessoa,
+                divisao_pct: null,
+                conta_destino: null,
+                conta_origem: null,
+                parcela: null,
+                hash: `manual-${Date.now()}`,
+                aviso: null,
+                origemRegra: null,
+              },
+              ...ls,
+            ])
+          }
+        >
+          + Linha que faltou
+        </Botao>
 
         {linhas.some(
           (l) => l.parcela && l.incluir && l.parcela.atual < l.parcela.total,
@@ -533,9 +536,9 @@ export default function Importar() {
           </li>
         </ul>
         <p className="mt-3 text-xs text-fraco">
-          CSV e OFX são lidos no seu aparelho. Prints e PDFs passam pelo
-          servidor do app e pela API do Claude só para leitura, e não ficam
-          guardados.
+          Tudo é lido no seu próprio aparelho: nenhum arquivo é enviado para
+          fora. Prints são lidos por reconhecimento de texto, então confira os
+          valores na revisão.
         </p>
       </Painel>
 

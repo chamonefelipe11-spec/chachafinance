@@ -1,4 +1,4 @@
-// Cron diário (vercel.json): manda os avisos do dia por notificação e/ou e-mail.
+// Cron diário (vercel.json): manda os avisos do dia por notificação no celular.
 // Protegido pelo CRON_SECRET, que a Vercel envia sozinha no cabeçalho Authorization.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
@@ -7,7 +7,6 @@ import {
   montarAvisos,
   resumoDoMes,
   type DadosAviso,
-  type Mensagem,
 } from "@/lib/avisos";
 import { definirContas } from "@/lib/finance";
 import { somarMeses } from "@/lib/format";
@@ -38,35 +37,6 @@ function pessoaDoEmail(
   if (/let/i.test(n)) return "Letícia";
   if (/cham|feli/i.test(n)) return "Chamone";
   return null;
-}
-
-async function enviarEmail(para: string, msgs: Mensagem[]) {
-  const chave = process.env.RESEND_API_KEY;
-  if (!chave) return false;
-  const html = msgs
-    .map(
-      (m) =>
-        `<h3 style="margin:16px 0 4px;font-family:sans-serif">${m.titulo}</h3><p style="margin:0;font-family:sans-serif;color:#333">${m.corpo}</p>`,
-    )
-    .join("");
-  const r = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${chave}`,
-    },
-    body: JSON.stringify({
-      from:
-        process.env.EMAIL_REMETENTE || "chachafinance <onboarding@resend.dev>",
-      to: [para],
-      subject:
-        msgs.length === 1
-          ? msgs[0].titulo
-          : `chachafinance: ${msgs.length} avisos`,
-      html: `${html}<p style="margin-top:24px;font-family:sans-serif;font-size:12px;color:#888">Enviado pelo chachafinance. Mude os avisos em Contas e categorias → Avisos.</p>`,
-    }),
-  });
-  return r.ok;
 }
 
 export async function GET(req: Request) {
@@ -148,10 +118,7 @@ export async function GET(req: Request) {
   if (pub && priv)
     webpush.setVapidDetails("mailto:chachafinance@example.com", pub, priv);
 
-  const relatorio: Record<
-    string,
-    { push: number; email: boolean; avisos: number }
-  > = {};
+  const relatorio: Record<string, { push: number; avisos: number }> = {};
   for (const cfg of configs) {
     const quem = cfg.pessoa || pessoaDoEmail(cfg.email, membros);
     const escolhidos = new Set(cfg.avisos || []);
@@ -160,38 +127,40 @@ export async function GET(req: Request) {
         escolhidos.has(m.tipo) &&
         (m.para === null || m.para === quem || quem === null),
     );
-    const r = { push: 0, email: false, avisos: meus.length };
+    const r = { push: 0, avisos: meus.length };
     if (meus.length && cfg.push && pub && priv) {
+      // Até 2 avisos vão separados; mais que isso viram uma notificação só (o resumo sempre vai à parte)
+      const resumo = meus.filter((m) => m.tipo === "resumo");
+      const outros = meus.filter((m) => m.tipo !== "resumo");
+      const envios =
+        outros.length > 2
+          ? [
+              {
+                titulo: `${outros.length} avisos para hoje e amanhã`,
+                corpo: outros.map((m) => m.titulo).join(" · "),
+                url: "/#inicio",
+                tag: `avisos-${hoje}`,
+              },
+            ]
+          : outros.map((m) => ({ titulo: m.titulo, corpo: m.corpo, url: m.url, tag: `${m.tipo}-${hoje}-${m.titulo}` }));
+      envios.push(...resumo.map((m) => ({ titulo: m.titulo, corpo: m.corpo, url: m.url, tag: `resumo-${hoje}` })));
       for (const s of inscricoes.filter((i) => i.email === cfg.email)) {
-        for (const m of meus.filter(
-          (m) => m.tipo !== "resumo" || !cfg.email_ativo,
-        )) {
+        for (const e of envios) {
           try {
             await webpush.sendNotification(
-              {
-                endpoint: s.endpoint,
-                keys: { p256dh: s.p256dh, auth: s.auth },
-              },
-              JSON.stringify({
-                titulo: m.titulo,
-                corpo: m.corpo,
-                url: m.url,
-                tag: `${m.tipo}-${hoje}-${m.titulo}`,
-              }),
+              { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+              JSON.stringify(e),
             );
             r.push += 1;
-          } catch (e) {
-            const status = (e as { statusCode?: number }).statusCode;
-            if (status === 404 || status === 410)
+          } catch (erro) {
+            const status = (erro as { statusCode?: number }).statusCode;
+            if (status === 404 || status === 410) {
               await sb.from("push_inscricoes").delete().eq("id", s.id); // aparelho desinstalou
+              break;
+            }
           }
         }
       }
-    }
-    if (meus.length && cfg.email_ativo) {
-      const paraEmail = meus.filter((m) => m.tipo === "resumo" || !cfg.push);
-      if (paraEmail.length)
-        r.email = await enviarEmail(cfg.email_destino || cfg.email, paraEmail);
     }
     relatorio[cfg.email] = r;
   }

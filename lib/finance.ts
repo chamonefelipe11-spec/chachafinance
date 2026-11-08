@@ -524,7 +524,7 @@ export function previstosFaltando(
   const novas: Record<string, unknown>[] = [];
   for (const r of recs) {
     for (const m of meses) {
-      if (!recorrenciaNoMes(r, m) || existentes.has(`${r.id}|${m}`)) continue;
+      if (!recorrenciaNoMes(r, m) || existentes.has(`${r.id}|${m}`) || (r.pulados || []).includes(m)) continue;
       const conta = contas.find((c) => c.nome === r.cartao);
       // Cartão e vale debitam sozinhos; conta corrente e receitas esperam confirmação
       const automatico =

@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -124,6 +125,7 @@ export default function App() {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
   }, []);
 
+  const tentadas = useRef(new Set<string>());
   // Contas fixas: cria os lançamentos do mês atual e do próximo que ainda não existem
   useEffect(() => {
     definirContas(dados.contas);
@@ -133,11 +135,17 @@ export default function App() {
       !dados.recorrencias.length
     )
       return;
+    // Cada conta fixa/mês é tentada uma vez por sessão (evita repetir se o banco recusar)
     const novas = previstosFaltando(
       dados.recorrencias,
       dados.transacoes,
       dados.contas,
-    );
+    ).filter((n) => {
+      const k = `${n.recorrencia_id}|${n.competencia}`;
+      if (tentadas.current.has(k)) return false;
+      tentadas.current.add(k);
+      return true;
+    });
     if (!novas.length) return;
     supabase
       .from("financas")

@@ -94,16 +94,21 @@ export default function Faculdade({
       const aula = aulasDoDia(dados.aulas, hoje).find(
         (a) => a.disciplina_id === d.id,
       );
-      if (
-        await db.inserir("presencas", {
-          disciplina_id: d.id,
-          aula_id: aula?.id || null,
-          data: hoje,
-          presente: false,
-          peso: aula?.peso || 1,
-        })
-      )
-        recarregar();
+      const jaMarcada = aula
+        ? dados.presencas.find((p) => p.aula_id === aula.id && p.data === hoje)
+        : undefined;
+      const ok = jaMarcada
+        ? jaMarcada.presente
+          ? await db.atualizar("presencas", jaMarcada.id, { presente: false })
+          : true // falta de hoje já está marcada
+        : await db.inserir("presencas", {
+            disciplina_id: d.id,
+            aula_id: aula?.id || null,
+            data: hoje,
+            presente: false,
+            peso: aula?.peso || 1,
+          });
+      if (ok) recarregar();
       return;
     }
     if (

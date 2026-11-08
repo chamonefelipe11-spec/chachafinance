@@ -413,3 +413,178 @@ export async function lerBase64(arquivo: File): Promise<string> {
     s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
   return btoa(s);
 }
+
+// ---------------- Texto lido por OCR ou de PDF ----------------
+
+const MESES: Record<string, number> = {
+  jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
+};
+
+const IGNORAR_LINHA =
+  /\b(saldo|total|limite|dispon[ií]vel|fatura (atual|fechada|aberta|anterior)|pagamento m[ií]nimo|valor (da|total) (fatura|compra)|melhor dia|vencimento|encargos|cet\b|iof previsto|resumo|parcelamento dispon)/i;
+const ENTRADA_TEXTO =
+  /recebid|dep[oó]sito|sal[aá]rio|estorno|reembolso|resgate|cr[eé]dito de|cashback|rendimento|devolu/i;
+// Linhas com data que não é de lançamento (fechamento, vencimento)
+const DATA_NAO_E_LANCAMENTO = /fecha|vence|vencimento|fechamento|melhor dia|per[ií]odo|extrato de|\bat[eé]\b.*\d{4}/i;
+// Categorias que os apps mostram embaixo do nome (o OCR às vezes come a 1ª letra)
+const CATEGORIAS_APP = [
+  'supermercado', 'mercado', 'transporte', 'restaurante', 'restaurantes', 'servicos', 'lazer', 'saude', 'educacao', 'casa',
+  'vestuario', 'eletronicos', 'outros', 'viagem', 'entretenimento', 'compras', 'assinaturas', 'combustivel', 'farmacia',
+  'alimentacao', 'delivery', 'pets', 'beleza', 'academia', 'hospedagem', 'shopping', 'presentes', 'bares', 'cultura',
+];
+const ehSubtitulo = (t: string) => {
+  const n = normalizar(t).replace(/[^a-z0-9/ ]/g, '').trim();
+  if (!n) return false;
+  if (/^parc(ela)?\s*\d{1,2}\s*(\/|de)\s*\d{1,2}$/.test(n)) return true;
+  return CATEGORIAS_APP.some((c) => c === n || (n.length >= 5 && c.endsWith(n)));
+};
+const GENERICA = /^(compra|compra (aprovada|realizada|efetuada|no d[eé]bito|no cr[eé]dito|d[eé]bito|cr[eé]dito)|aprovad[ao]|pix|pagamento|pagamento aprovado|transa[cç][aã]o|d[eé]bito|cr[eé]dito|recarga mensal)$/i;
+
+const ehDataISO = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+function somarDias(iso: string, n: number) {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Acha uma data na linha e devolve a linha sem ela. */
+export function dataDaLinha(linha: string, hoje: string): { data: string; resto: string } | null {
+  const ano = Number(hoje.slice(0, 4));
+  const ajustar = (d: number, m: number, a?: number) => {
+    if (d < 1 || d > 31 || m < 1 || m > 12) return null;
+    const montar = (y: number) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (a) return montar(a < 100 ? 2000 + a : a);
+    // Sem ano: o mais recente que não passe de amanhã
+    const iso = montar(ano);
+    return iso > somarDias(hoje, 1) ? montar(ano - 1) : iso;
+  };
+  let m = linha.match(/\b(hoje|ontem|anteontem)\b/i);
+  if (m) {
+    const n = m[1].toLowerCase() === 'hoje' ? 0 : m[1].toLowerCase() === 'ontem' ? -1 : -2;
+    return { data: somarDias(hoje, n), resto: linha.replace(m[0], ' ') };
+  }
+  m = linha.match(/(?:^|\s)([0-9OoIl]{1,2})\s*(?:de\s+)?(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç]*\.?(?:\s*(?:de\s+)?(\d{4}))?\b/i);
+  if (m) {
+    // OCR troca 0 por O e 1 por l
+    const dia = Number(m[1].replace(/[Oo]/g, '0').replace(/[Il]/g, '1'));
+    const data = ajustar(dia, MESES[m[2].toLowerCase()], m[3] ? Number(m[3]) : undefined);
+    if (data) return { data, resto: linha.replace(m[0], ' ') };
+  }
+  // dd/mm/aaaa em qualquer lugar; dd/mm sem ano só no começo da linha (senão pode ser parcela 3/10)
+  m = linha.match(/\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})\b/) || linha.match(/^\s*(\d{1,2})[/.](\d{1,2})(?![/.\d])/);
+  if (m) {
+    const data = ajustar(Number(m[1]), Number(m[2]), m[3] ? Number(m[3]) : undefined);
+    if (data) return { data, resto: linha.replace(m[0], ' ') };
+  }
+  return null;
+}
+
+/** Primeiro valor em reais da linha (com sinal, se houver). */
+export function valorDaLinha(linha: string): { valor: number; sinal: 1 | -1 | 0; resto: string } | null {
+  const re = /([+\-−–—]+\s*)?(R\s?[$S5]\s*)?([+\-−–—]+\s*)?(\d{1,3}(?:[.\s]\d{3})*|\d+),(\d{2})(?!\d|\s*%)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(linha))) {
+    const antes = linha.slice(0, m.index);
+    if (/\d[/.-]$/.test(antes)) continue; // parte de uma data
+    const inteiro = m[4].replace(/[.\s]/g, '');
+    const valor = Number(`${inteiro}.${m[5]}`);
+    if (!Number.isFinite(valor) || valor <= 0) continue;
+    const s = (m[1] || m[3] || '').trim();
+    const sinal = s.includes('+') ? 1 : s ? -1 : 0;
+    return { valor, sinal: sinal as 1 | -1 | 0, resto: linha.slice(0, m.index) + ' ' + linha.slice(m.index + m[0].length) };
+  }
+  return null;
+}
+
+const limparDescricao = (s: string) =>
+  s
+    .replace(/[+\-−–]?\s*R\s?[$S5]\s*[+\-−–]?\s*(\d{1,3}(?:[.\s]\d{3})*|\d+),\d{2}/g, ' ') // outros valores (ex.: saldo)
+    .replace(/(^|\s)(\d{1,3}(?:\.\d{3})*|\d+),\d{2}(?=\s|$)/g, ' ')
+    .replace(/\b\d{1,2}:\d{2}\b/g, ' ')
+    .replace(/\bàs\b|\bas\b(?=\s*$)/gi, ' ')
+    .replace(/R\s?[$S5]/g, ' ')
+    .replace(/^[\s\-–—•·|:>*]+|[\s\-–—•·|:>*]+$/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+/**
+ * Transforma o texto de um print ou PDF de extrato/fatura em lançamentos.
+ * Convenção de sinal igual à dos arquivos: no cartão, compra = positivo; na conta, saída = negativo.
+ */
+export function lerTextoExtrato(texto: string, tipoConta: Conta['tipo'], hoje: string): LinhaBruta[] {
+  const out: LinhaBruta[] = [];
+  let dataAtual: string | null = null;
+  // Linhas só de texto desde o último lançamento (nome do estabelecimento, categoria…)
+  let soTexto: string[] = [];
+  const credito = tipoConta === 'credito';
+  // Último lançamento cujo nome veio na mesma linha do valor: a parcela pode vir na linha de baixo
+  let ultimoNaLinha: LinhaBruta | null = null;
+
+  for (const bruta of texto.split(/\r?\n/)) {
+    let linha = bruta.replace(/\s+/g, ' ').trim();
+    if (linha.length < 2) continue;
+    const d = dataDaLinha(linha, hoje);
+    if (d && ehDataISO(d.data) && !DATA_NAO_E_LANCAMENTO.test(linha)) {
+      dataAtual = d.data;
+      linha = d.resto.trim();
+      soTexto = [];
+      ultimoNaLinha = null;
+    }
+    const v = valorDaLinha(linha);
+    if (!v) {
+      const t = limparDescricao(linha);
+      const parc = lerParcela(t);
+      if (parc && !soTexto.length && ultimoNaLinha && !ultimoNaLinha.parcela) {
+        ultimoNaLinha.descricao = `${ultimoNaLinha.descricao} ${parc.atual}/${parc.total}`;
+        ultimoNaLinha.parcela = parc;
+        ultimoNaLinha = null;
+        continue;
+      }
+      if (t.length >= 3 && /[a-zA-ZÀ-ú]{2}/.test(t) && !IGNORAR_LINHA.test(t)) soTexto.push(t);
+      continue;
+    }
+    ultimoNaLinha = null;
+    if (IGNORAR_LINHA.test(linha)) {
+      soTexto = [];
+      continue;
+    }
+    const t = limparDescricao(v.resto);
+    // Nome do estabelecimento: o texto da própria linha, a não ser que seja só a categoria/parcela;
+    // aí vale a última linha de texto antes do valor que não seja genérica nem categoria
+    const anteriores = soTexto.filter((x) => !GENERICA.test(x) && !ehSubtitulo(x));
+    const semNome = t.length < 3 || !/[a-zA-ZÀ-ú]{2}/.test(t) || GENERICA.test(t) || ehSubtitulo(t);
+    let descricao = semNome ? anteriores[anteriores.length - 1] || t : t;
+    const parcelaTexto = [t, ...soTexto].find((x) => lerParcela(x));
+    if (parcelaTexto && !lerParcela(descricao)) descricao = `${descricao} ${parcelaTexto.match(/\d{1,2}\s*(?:\/|de)\s*\d{1,2}/)?.[0] || ''}`.trim();
+    soTexto = [];
+    if (!descricao || !dataAtual) continue;
+    // Na fatura do cartão, o sinal de menos marca crédito (pagamento, estorno); na conta, marca saída
+    const entrada = credito
+      ? v.sinal === -1 || ENTRADA_TEXTO.test(descricao)
+      : v.sinal === 1 || (v.sinal === 0 && ENTRADA_TEXTO.test(descricao));
+    const valor = credito ? (entrada ? -v.valor : v.valor) : entrada ? v.valor : -v.valor;
+    const item: LinhaBruta = { data: dataAtual, descricao, valor, parcela: lerParcela(descricao) };
+    out.push(item);
+    if (!semNome) ultimoNaLinha = item;
+  }
+  return out;
+}
+
+/** Junta lançamentos lidos de prints que se sobrepõem (o mesmo item em dois prints). */
+export function semRepetidosEntrePrints(grupos: LinhaBruta[][]): LinhaBruta[] {
+  const vistos = new Map<string, number>();
+  const out: LinhaBruta[] = [];
+  for (const g of grupos) {
+    const contagem = new Map<string, number>();
+    for (const l of g) {
+      const k = `${l.data}|${l.valor}|${normalizar(l.descricao).slice(0, 12)}`;
+      const n = (contagem.get(k) || 0) + 1;
+      contagem.set(k, n);
+      // Só entra se este print tiver mais ocorrências do que as já vistas em prints anteriores
+      if (n > (vistos.get(k) || 0)) out.push(l);
+    }
+    for (const [k, n] of contagem) vistos.set(k, Math.max(vistos.get(k) || 0, n));
+  }
+  return out;
+}
