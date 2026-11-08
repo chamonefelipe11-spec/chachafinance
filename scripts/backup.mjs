@@ -23,7 +23,8 @@ async function lerTabela(t) {
   const linhas = [];
   for (let de = 0; ; de += 1000) {
     const r = await fetch(`${URL_SB}/rest/v1/${t}?select=*&order=id.asc&offset=${de}&limit=1000`, {
-      headers: { apikey: CHAVE, Authorization: `Bearer ${CHAVE}` },
+      // Chaves novas (sb_secret_) vão só no cabeçalho apikey; as antigas (JWT) também no Authorization
+      headers: CHAVE.startsWith('eyJ') ? { apikey: CHAVE, Authorization: `Bearer ${CHAVE}` } : { apikey: CHAVE },
     });
     if (r.status === 404) return null; // tabela ainda não criada
     if (!r.ok) throw new Error(`${t}: ${r.status} ${await r.text()}`);
