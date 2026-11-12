@@ -297,6 +297,11 @@ function tratarErro(tabela: string, msg: string) {
       `A tabela "${tabela}" ainda não existe. Rode o SQL mais novo da pasta supabase/ no Supabase.`,
       "erro",
     );
+  else if (/value too long for type character varying/i.test(msg))
+    avisar(
+      'O banco limita o tamanho desse campo. Rode supabase/correcao-tamanho.sql no SQL Editor do Supabase e tente de novo.',
+      "erro",
+    );
   else avisar(`Não foi possível salvar: ${msg}`, "erro");
 }
 

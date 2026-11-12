@@ -8,6 +8,8 @@ Finanças, faculdade e agenda do Chamone e da Letícia. Next.js 16 + Supabase, p
 2. `supabase/fase0-seguranca.sql` — só os logins do casal acessam (rode a etapa 1, confira os e-mails, depois a etapa 2).
 3. `supabase/fase2a5.sql` — transferências, saldo, contas fixas, importação, avisos, grade da faculdade.
 4. `supabase/projetos.sql` — quadro de projetos (cards e Gantt).
+5. `supabase/correcao-tamanho.sql` — tira o limite de 10 letras de `financas.tipo` (sem ele, transferências,
+   pagar fatura e ajuste de saldo dão "value too long for type character varying(10)").
 
 Todos só acrescentam tabelas/colunas e podem ser rodados de novo. `fase0-desfazer.sql` volta a regra de acesso antiga.
 Desligue o cadastro público em *Authentication → Sign In / Providers → Allow new users to sign up*.
