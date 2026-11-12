@@ -1,5 +1,5 @@
 // Leitura de extratos (CSV/OFX) e preparação das linhas para a tela de revisão.
-import type { Conta, Quem, Regra, Transacao } from "./types";
+import type { Categoria, Conta, Quem, Regra, Transacao } from "./types";
 import { descricaoBase } from "./finance";
 import { dataDeISO, diffDias, somarDiasISO } from "./format";
 
@@ -237,6 +237,32 @@ const PALAVRAS: [RegExp, string][] = [
   [/compras? (de |da |pra |para )?casa|alimentac/, "Alimentação / Mercado"],
 ];
 
+/**
+ * Leva a categoria sugerida para uma que existe no cadastro: se "Alimentação / Mercado"
+ * virou "Mercado", a sugestão acompanha (pelas palavras do nome).
+ */
+export function categoriaExistente(
+  nome: string,
+  categorias: Categoria[] | undefined,
+  tipo: "despesa" | "receita",
+): string {
+  const ativas = (categorias || []).filter((c) => c.ativo !== false);
+  if (!ativas.length || nome === "Transferência") return nome;
+  const n = normalizar(nome);
+  const igual = ativas.find((c) => normalizar(c.nome) === n);
+  if (igual) return igual.nome;
+  const doTipo = ativas.filter((c) => (tipo === "receita" ? c.tipo !== "despesa" : c.tipo !== "receita"));
+  const palavras = n.split(/[^a-z]+/).filter((w) => w.length >= 4);
+  const radical = (w: string) => w.slice(0, Math.max(4, Math.min(6, w.length - 1)));
+  const parecida = doTipo.find((c) => {
+    const cn = normalizar(c.nome);
+    return palavras.some((w) => cn.includes(radical(w)));
+  });
+  if (parecida) return parecida.nome;
+  const outros = doTipo.find((c) => /^outr/.test(normalizar(c.nome)));
+  return outros?.nome || nome;
+}
+
 /** Categoria provável pelo tipo do benefício (Caju VA → mercado, mobilidade → transporte…). */
 function categoriaDoBeneficio(conta: Conta): string | null {
   if (conta.tipo !== "beneficio") return null;
@@ -258,6 +284,8 @@ const APLICACAO =
 export interface Contexto {
   conta: Conta;
   contas: Conta[];
+  /** Categorias cadastradas: as sugestões são ajustadas aos nomes que existem */
+  categorias?: Categoria[];
   regras: Regra[];
   transacoes: Transacao[];
   pessoaPadrao: Quem;
@@ -400,7 +428,10 @@ export function prepararLinhas(
       descricao: b.descricao.replace(/\s+/g, " ").trim(),
       valor,
       tipo,
-      categoria: tipo === "transferencia" ? "Transferência" : categoria,
+      categoria:
+        tipo === "transferencia"
+          ? "Transferência"
+          : categoriaExistente(categoria, ctx.categorias, tipo === "receita" ? "receita" : "despesa"),
       quem,
       divisao_pct: divisao,
       conta_destino: destino,

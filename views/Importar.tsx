@@ -159,6 +159,7 @@ export default function Importar() {
         const preparadas = prepararLinhas(lista, {
           conta: dados.contas.find((c) => c.nome === nome) || contaObj,
           contas: dados.contas,
+          categorias: dados.categorias,
           regras: dados.regras,
           transacoes: dados.transacoes,
           pessoaPadrao: pessoa,

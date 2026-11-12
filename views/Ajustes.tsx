@@ -294,13 +294,15 @@ function ContaForm({
       ? await db.atualizar("contas", conta.id, payload)
       : await db.inserir("contas", payload);
     if (ok && conta && conta.nome !== n) {
-      ok =
-        (await db.atualizarOnde("financas", "cartao", conta.nome, {
-          cartao: n,
-        })) &&
-        (await db.atualizarOnde("faturas_pagas", "conta", conta.nome, {
-          conta: n,
-        }));
+      // Renomeia em todo lugar que guarda o nome da conta (inclusive transferências que chegam nela)
+      const r = await Promise.all([
+        db.atualizarOnde("financas", "cartao", conta.nome, { cartao: n }),
+        db.atualizarOnde("financas", "conta_destino", conta.nome, { conta_destino: n }, true),
+        db.atualizarOnde("faturas_pagas", "conta", conta.nome, { conta: n }),
+        db.atualizarOnde("recorrencias", "cartao", conta.nome, { cartao: n }, true),
+        db.atualizarOnde("regras", "transferir_para", conta.nome, { transferir_para: n }, true),
+      ]);
+      ok = r.every(Boolean);
     }
     setSalvando(false);
     if (ok) {
@@ -461,10 +463,16 @@ function CategoriaForm({
     let ok = cat
       ? await db.atualizar("categorias", cat.id, payload)
       : await db.inserir("categorias", payload);
-    if (ok && cat && cat.nome !== n)
-      ok = await db.atualizarOnde("financas", "categoria", cat.nome, {
-        categoria: n,
-      });
+    if (ok && cat && cat.nome !== n) {
+      // Renomeia em todo lugar que guarda o nome: lançamentos, regras, contas fixas e cards
+      const r = await Promise.all([
+        db.atualizarOnde("financas", "categoria", cat.nome, { categoria: n }),
+        db.atualizarOnde("regras", "categoria", cat.nome, { categoria: n }, true),
+        db.atualizarOnde("recorrencias", "categoria", cat.nome, { categoria: n }, true),
+        db.atualizarOnde("cards", "categoria", cat.nome, { categoria: n }, true),
+      ]);
+      ok = r.every(Boolean);
+    }
     setSalvando(false);
     if (ok) {
       avisar(cat ? "Categoria atualizada." : "Categoria criada.");

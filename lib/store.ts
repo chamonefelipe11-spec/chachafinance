@@ -374,16 +374,20 @@ export const db = {
     );
   },
 
+  /** `opcional`: tabela/coluna que pode ainda não existir no banco (aí não é erro). */
   async atualizarOnde(
     tabela: string,
     coluna: string,
     valorAtual: string,
     valores: Linha,
+    opcional = false,
   ): Promise<boolean> {
     const { error } = await supabase
       .from(tabela)
       .update(valores)
       .eq(coluna, valorAtual);
+    if (error && opcional && (erroDeTabela(error.message) || colunaInexistente(error.message) || /column .* does not exist/i.test(error.message)))
+      return true;
     if (error) tratarErro(tabela, error.message);
     return !error;
   },
