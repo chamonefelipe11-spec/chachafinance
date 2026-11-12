@@ -47,7 +47,10 @@ export async function encerrarOCR() {
 }
 
 /** Prepara o print para o OCR: aumenta, passa para cinza e inverte se for tema escuro. */
-async function prepararImagem(fonte: Blob | HTMLCanvasElement): Promise<HTMLCanvasElement> {
+async function prepararImagem(
+  fonte: Blob | HTMLCanvasElement,
+  { maxEscala = 3, folga = 25 }: { maxEscala?: number; folga?: number } = {},
+): Promise<HTMLCanvasElement> {
   let largura: number, altura: number, desenhar: (ctx: CanvasRenderingContext2D, w: number, h: number) => void;
   if (fonte instanceof HTMLCanvasElement) {
     largura = fonte.width;
@@ -59,7 +62,7 @@ async function prepararImagem(fonte: Blob | HTMLCanvasElement): Promise<HTMLCanv
     altura = bmp.height;
     desenhar = (ctx, w, h) => ctx.drawImage(bmp, 0, 0, w, h);
   }
-  const escala = Math.min(Math.max(2000 / largura, 1), 3);
+  const escala = Math.min(Math.max(2000 / largura, 1), maxEscala);
   const c = document.createElement('canvas');
   c.width = Math.round(largura * escala);
   c.height = Math.round(altura * escala);
@@ -95,7 +98,7 @@ async function prepararImagem(fonte: Blob | HTMLCanvasElement): Promise<HTMLCanv
     if (entre > melhor) { melhor = entre; limiar = t; }
   }
   // Um pouco acima do limiar: texto cinza-claro (categorias, datas) não some
-  limiar = Math.min(limiar + 25, 235);
+  limiar = Math.min(limiar + folga, 235);
   for (let i = 0, j = 0; i < d.length; i += 4, j++) {
     const y = cinza[j] < limiar ? 0 : 255;
     d[i] = d[i + 1] = d[i + 2] = y;
@@ -115,7 +118,8 @@ export async function textoDeImagem(
 ): Promise<string> {
   avisarProgresso = progresso;
   const w = await obterWorker();
-  const canvas = await prepararImagem(arquivo);
+  // Conversas: prints estreitos são ampliados mais, e o limiar fica mais justo (letras finas nos balões)
+  const canvas = await prepararImagem(arquivo, modo === 'esparso' ? { maxEscala: 5, folga: 10 } : {});
   await w.setParameters({ tessedit_pageseg_mode: modo === 'esparso' ? '11' : '6', preserve_interword_spaces: '1' });
   const r = await w.recognize(canvas);
   return r.data.text || '';

@@ -619,10 +619,13 @@ const DIAS_SEMANA_WPP = ["domingo", "segunda", "terca", "quarta", "quinta", "sex
 /** Mensagem curta de gasto: começa com sinal (ou R$) e valor; a hora do WhatsApp fica no fim. */
 // O OCR às vezes troca o "-" por aspas ou til
 const MSG_GASTO =
-  /^([+\-−–—~“”"'‘’`´]+)?\s*(?:r\s?\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?![\d/])\s*(.*)$/i;
+  /^([+\-−–—~“”"'‘’`´]+)?\s*(?:r\s?[$s5]\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?![\d/])\s*(.*)$/i;
 // Hora da mensagem no fim ("12:32", ou "1232" quando o OCR perde os dois-pontos) e os tiques de lida
 const HORA_FIM =
-  /\s*(?:editad[ao]\s*)?\b(?:(?:[01]\d|2[0-3])[0-5]\d|(?:[01]?\d|2[0-3])\s?[:.;,\-]\s?[0-5]\d)\b[\s yv/&,.;:'"✓✔*\-]{0,6}$/i;
+  /\s*(?:editad[ao]\s*)?\b(?:(?:[01]\d|2[0-3])[0-5]\d|(?:[01]?\d|2[0-3])\s?[:.;,\- ]\s?[0-5]\d)\b[\s yv/&,.;:'"✓✔*\-]{0,6}$/i;
+// Linha só com a hora (e os tiques, que o OCR lê como letras soltas): o balão acabou
+const SO_HORA =
+  /^(?:editad[ao]\s*)?(?:(?:[01]\d|2[0-3])[0-5]\d|(?:[01]?\d|2[0-3])\s?[:.;,\- ]\s?[0-5]\d)\d?(?:[^a-zA-ZÀ-ú0-9]{0,4}[a-zA-Z]{0,2}){0,2}[^a-zA-ZÀ-ú0-9]{0,4}$/i;
 const sinalDeMenos = (s: string) => /[\-−–—~“”"'‘’`´]/.test(s);
 
 /** O print pega outras janelas ao lado: blocos separados por muitos espaços são tratados à parte. */
@@ -663,7 +666,7 @@ export function pareceWhatsApp(texto: string): boolean {
   for (const l of linhas) {
     const m = l.match(MSG_GASTO);
     if (!m || !/[a-zA-ZÀ-ú]{3}/.test(m[3] || "")) continue;
-    if ((m[1] || /^r\s?\$/i.test(l)) && HORA_FIM.test(m[3] || "")) comHora++;
+    if ((m[1] || /^r\s?[$s5]/i.test(l)) && HORA_FIM.test(m[3] || "")) comHora++;
     if (m[1]) comSinal++;
   }
   const separadores = linhas.filter((l) => /^(hoje|ontem)$/i.test(l) || /feira$|^s[aá]bado$|^domingo$/i.test(l)).length;
@@ -709,7 +712,7 @@ function corrigirNomesDeConta(texto: string, contas: Conta[]): string {
 const PALAVRAS_SUBCONTA: [RegExp, RegExp][] = [
   [/aliment|mercado|\bva\b/, /\bva\b|aliment/],
   [/refeic|almoc|\bvr\b|restaurante|marmit/, /\bvr\b|refei/],
-  [/bhbus|onibus|metro|move\b|mobilidade|uber|gasolina|combust|transporte/, /mobilidade|transporte/],
+  [/bhbus|onibus|metro|move\b|\bmob\b|mobilidade|uber|\b99\b|gasolina|combust|transporte/, /mobilidade|transporte/],
   [/cultura|cinema|livro|teatro/, /cultura/],
 ];
 const GENERICAS_CONTA = new Set(["cartao", "conta", "corrente", "banco", "pix", "investimentos", "padrao"]);
@@ -763,20 +766,47 @@ export function lerMensagensWhatsApp(
 
   const out: LinhaBruta[] = [];
   let data: string | null = null;
-  for (const linha of texto.split(/\r?\n/).flatMap(pedacosDaLinha)) {
+  let primeiroSeparador: string | null = null;
+  const tokensConta = new Set(
+    contas.flatMap((c) => normalizar(c.nome).split(/[^a-z0-9]+/)).filter((t) => t.length >= 3 && !GENERICAS_CONTA.has(t)),
+  );
+  const pedacos = texto.split(/\r?\n/).flatMap(pedacosDaLinha);
+  for (let i = 0; i < pedacos.length; i++) {
+    const linha = pedacos[i];
     const sep = dataDoSeparador(linha, ref);
     if (sep) {
       data = sep;
+      primeiroSeparador ??= sep;
       continue;
     }
     const m = linha.match(MSG_GASTO);
     if (!m) continue;
-    const temSinal = !!m[1];
+    const temSinal = !!m[1] || /^r\s?[$s5]/i.test(linha);
     const temHora = HORA_FIM.test(m[3] || "");
-    // Sem sinal nem "R$" só vale se tiver a hora da mensagem no fim (evita números soltos de comprovantes)
-    if (!temSinal && !/^r\s?\$/i.test(linha) && !temHora) continue;
+    // O OCR pode perder o "-": aí vale se a hora vier logo depois, ou se a 1ª palavra for uma conta (caju…)
+    const horaEmSeguida = SO_HORA.test(pedacos[i + 1] || "");
+    const primeira = normalizar((m[3] || "").split(/\s+/)[0] || "");
+    const comecaComConta = [...tokensConta].some((t) => quaseIgual(primeira, t));
+    if (!temSinal && !temHora && !horaEmSeguida && !comecaComConta) continue;
     let resto = (m[3] || "").replace(HORA_FIM, "").trim();
     resto = resto.replace(/\beditad[ao]\b/gi, "").replace(/[✓✔√]+/g, "").trim();
+    // Data escrita na própria mensagem ("-6,11 caju 03/11")
+    let dataPropria: string | null = null;
+    const dm = resto.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+    if (dm && Number(dm[1]) <= 31 && Number(dm[2]) <= 12) {
+      let ano = dm[3] ? (dm[3].length === 2 ? `20${dm[3]}` : dm[3]) : ref.slice(0, 4);
+      let iso = `${ano}-${dm[2].padStart(2, "0")}-${dm[1].padStart(2, "0")}`;
+      if (!dm[3] && iso > ref) {
+        ano = String(Number(ano) - 1);
+        iso = `${ano}-${dm[2].padStart(2, "0")}-${dm[1].padStart(2, "0")}`;
+      }
+      if (ehDataISO(iso)) {
+        dataPropria = iso;
+        resto = resto.replace(dm[0], " ").replace(/\s+/g, " ").trim();
+      }
+    }
+    // Restos de hora ou de tique que o OCR deixou no fim ("caju 9.5, ,")
+    resto = resto.replace(/(?<=[a-zA-ZÀ-ú)])\s+[\d\s.,:;'"/|&yv]*$/i, "").trim();
     if (!/[a-zA-ZÀ-ú]{3}/.test(resto)) continue;
     const bruto = m[2];
     let valor = bruto.includes(",")
@@ -801,7 +831,7 @@ export function lerMensagensWhatsApp(
     const conta = contaDaMensagem(resto, contas, contaPadrao, uso);
     const descricao = resto.charAt(0).toUpperCase() + resto.slice(1);
     out.push({
-      data: data || "",
+      data: dataPropria || data || "",
       descricao,
       valor: entrada ? valor : -valor,
       parcela,
@@ -809,10 +839,9 @@ export function lerMensagensWhatsApp(
     });
   }
   // Mensagens antes do primeiro separador de dia: provavelmente do dia anterior a ele
-  const primeiro = out.find((l) => l.data)?.data;
   for (const l of out)
     if (!l.data) {
-      l.data = primeiro ? somarDiasISO(primeiro, -1) : ref;
+      l.data = primeiroSeparador ? somarDiasISO(primeiroSeparador, -1) : ref;
       l.dataIncerta = true;
     }
   return out;

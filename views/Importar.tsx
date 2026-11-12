@@ -286,7 +286,11 @@ export default function Importar() {
       ok = await db.inserir("financas", novas.slice(i, i + 300));
     setSalvando(false);
     if (ok) {
-      avisar(`${marcadas.length} lançamentos importados.`);
+      const contasUsadas = [...new Set(marcadas.map((l) => l.conta))];
+      avisar(
+        `${marcadas.length} lançamentos importados em ${contasUsadas.join(", ")}. Veja em Lançamentos.`,
+        "ok",
+      );
       setLinhas([]);
       setEtapa("escolher");
       recarregar();
