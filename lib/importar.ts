@@ -670,27 +670,27 @@ export function pareceWhatsApp(texto: string): boolean {
   return comHora >= 2 || (comHora >= 1 && separadores >= 1) || (comSinal >= 2 && separadores >= 1);
 }
 
-/** Uma letra trocada, sobrando ou faltando ("caiu" ≈ "caju"): erro comum do OCR. */
+/**
+ * Erro de digitação ou de OCR: letras trocadas, sobrando, faltando ou invertidas
+ * ("caiu" ≈ "caju", "intecerd" ≈ "intercred"). Palavras longas aceitam 2 erros; médias, 1.
+ */
 function quaseIgual(a: string, b: string): boolean {
-  if (Math.abs(a.length - b.length) > 1) return false;
-  let i = 0;
-  let j = 0;
-  let erros = 0;
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      i++;
-      j++;
-      continue;
+  if (a === b) return true;
+  const max = Math.min(a.length, b.length) >= 7 ? 2 : Math.min(a.length, b.length) >= 4 ? 1 : 0;
+  if (!max || Math.abs(a.length - b.length) > max) return false;
+  if (a[0] !== b[0]) return false; // a primeira letra quase sempre sai certa
+  // Distância de Damerau-Levenshtein (inversão de duas letras conta como 1 erro)
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+  );
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) {
+      const custo = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + custo);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
     }
-    if (++erros > 1) return false;
-    if (a.length > b.length) i++;
-    else if (b.length > a.length) j++;
-    else {
-      i++;
-      j++;
-    }
-  }
-  return erros + (a.length - i) + (b.length - j) <= 1;
+  return d[a.length][b.length] <= max;
 }
 
 /** Troca palavras quase iguais ao nome de uma conta pelo nome certo ("caiu" → "caju"). */
@@ -725,7 +725,7 @@ export function contaDaMensagem(texto: string, contas: Conta[], padrao: string, 
   let melhor: { nome: string; pontos: number } | null = null;
   for (const c of ativas) {
     const tokens = normalizar(c.nome).split(/[^a-z0-9]+/).filter((t) => t.length >= 2 && !GENERICAS_CONTA.has(t));
-    let pontos = tokens.filter((t) => palavras.some((p) => p === t || (t.length >= 4 && p.length >= 4 && quaseIgual(p, t)))).length * 10;
+    let pontos = tokens.filter((t) => palavras.some((p) => quaseIgual(p, t))).length * 10;
     if (!pontos) continue;
     for (const [palavra, nomeConta] of PALAVRAS_SUBCONTA)
       if (palavra.test(n) && nomeConta.test(normalizar(c.nome))) pontos += 5;
