@@ -37,13 +37,16 @@ export default function Orcamento() {
       ),
     [dados.transacoes, mes, cats],
   );
-  const media3 = useMemo(() => {
-    const meses = ultimosMeses(somarMeses(mes, -1), 3);
+  // Média dos 3 meses anteriores; se o app tem menos de 3 meses de dados, divide só pelos que têm
+  const { media3, mesesMedia } = useMemo(() => {
+    const meses = ultimosMeses(somarMeses(mes, -1), 3).filter(
+      (mm) => doMes(dados.transacoes, mm).length > 0,
+    );
     const m = new Map<string, number>();
     for (const mm of meses)
       for (const t of despesasReais(doMes(dados.transacoes, mm), cats))
-        m.set(t.categoria, (m.get(t.categoria) || 0) + t.valor / 3);
-    return m;
+        m.set(t.categoria, (m.get(t.categoria) || 0) + t.valor / meses.length);
+    return { media3: m, mesesMedia: meses.length };
   }, [dados.transacoes, mes, cats]);
 
   const ehAtual = mes === mesAtual();
@@ -52,24 +55,35 @@ export default function Orcamento() {
       diasNoMes(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)))
     : 1;
 
+  // Referência de cada categoria: o limite definido ou, sem limite, a média dos últimos meses
   const linhas = categorias
-    .map((c) => ({
-      ...c,
-      gasto: gasto.get(c.nome) || 0,
-      media: media3.get(c.nome) || 0,
-    }))
+    .map((c) => {
+      const media = media3.get(c.nome) || 0;
+      const ref = c.orcamento || (media >= 1 ? media : 0);
+      return {
+        ...c,
+        gasto: gasto.get(c.nome) || 0,
+        media,
+        ref,
+        pelaMedia: !c.orcamento && ref > 0,
+      };
+    })
     .sort(
       (a, b) =>
-        Number(!!b.orcamento) - Number(!!a.orcamento) || b.gasto - a.gasto,
+        Number(b.ref > 0) - Number(a.ref > 0) ||
+        (a.ref && b.ref ? b.gasto / b.ref - a.gasto / a.ref : 0) ||
+        b.gasto - a.gasto,
     );
-  const totalLimite = linhas.reduce((a, l) => a + (l.orcamento || 0), 0);
-  const totalGastoOrcado = linhas
-    .filter((l) => l.orcamento)
-    .reduce((a, l) => a + Math.min(l.gasto, Infinity), 0);
-  const foraOrcamento = [...gasto.entries()]
-    .filter(([n]) => !cats.get(n)?.orcamento)
+  const comRef = linhas.filter((l) => l.ref > 0);
+  const totalRef = comRef.reduce((a, l) => a + l.ref, 0);
+  const totalDefinido = comRef.filter((l) => !l.pelaMedia).reduce((a, l) => a + l.ref, 0);
+  const totalGastoComRef = comRef.reduce((a, l) => a + l.gasto, 0);
+  const nomesComRef = new Set(comRef.map((l) => l.nome));
+  const semReferencia = [...gasto.entries()]
+    .filter(([n]) => !nomesComRef.has(n))
     .reduce((a, [, v]) => a + v, 0);
-  const estouradas = linhas.filter((l) => l.orcamento && l.gasto > l.orcamento);
+  const estouradas = comRef.filter((l) => l.gasto > l.ref);
+  const esperadoHoje = totalRef * fracaoMes;
 
   function comecar() {
     if (faltando.includes("categorias"))
@@ -120,22 +134,60 @@ export default function Orcamento() {
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
-          <p className="text-[13px] text-fraco">
-            Gasto nas categorias com limite
-          </p>
+          <p className="text-[13px] text-fraco">Gasto no mês</p>
           <p className="display num mt-1 text-3xl font-semibold">
-            {dinheiro(totalGastoOrcado)}
+            {dinheiro(totalGastoComRef)}
           </p>
           <p className="num text-sm text-suave">
-            de {dinheiro(totalLimite)} planejados
+            de {dinheiro(totalRef)}
+            {totalRef > 0 &&
+              (totalDefinido === 0
+                ? " pela média"
+                : totalDefinido < totalRef
+                  ? ` (${dinheiro(totalDefinido)} em limites, o resto pela média)`
+                  : " planejados")}
           </p>
+          {totalRef > 0 && (
+            <div className="mt-2">
+              <Barra
+                valor={totalGastoComRef}
+                max={totalRef}
+                cor="#ece6d8"
+                marca={ehAtual ? esperadoHoje : undefined}
+              />
+            </div>
+          )}
         </div>
         <div>
-          <p className="text-[13px] text-fraco">Fora do orçamento</p>
-          <p className="display num mt-1 text-3xl font-semibold text-suave">
-            {dinheiro(foraOrcamento)}
+          <p className="text-[13px] text-fraco">
+            {ehAtual ? "Até hoje, pelo ritmo" : "Resultado do mês"}
           </p>
-          <p className="text-sm text-suave">em categorias sem limite</p>
+          <p
+            className={cx(
+              "display num mt-1 text-3xl font-semibold",
+              totalRef === 0
+                ? "text-suave"
+                : (ehAtual ? totalGastoComRef > esperadoHoje : totalGastoComRef > totalRef)
+                  ? "text-saida"
+                  : "text-entrada",
+            )}
+          >
+            {totalRef === 0
+              ? "—"
+              : ehAtual
+                ? `${totalGastoComRef > esperadoHoje ? "+" : "−"}${dinheiro(Math.abs(totalGastoComRef - esperadoHoje))}`
+                : `${totalGastoComRef > totalRef ? "+" : "−"}${dinheiro(Math.abs(totalGastoComRef - totalRef))}`}
+          </p>
+          <p className="num text-sm text-suave">
+            {totalRef === 0
+              ? "Sem limites nem histórico ainda"
+              : ehAtual
+                ? `${totalGastoComRef > esperadoHoje ? "acima" : "abaixo"} do esperado para o dia ${Number(hojeISO().slice(8, 10))} (${dinheiro(esperadoHoje)})`
+                : totalGastoComRef > totalRef
+                  ? "acima da referência"
+                  : "abaixo da referência"}
+            {semReferencia > 0 && ` · ${dinheiro(semReferencia)} em categorias novas, sem média`}
+          </p>
         </div>
         <div>
           <p className="text-[13px] text-fraco">Situação</p>
@@ -145,16 +197,16 @@ export default function Orcamento() {
               estouradas.length ? "text-saida" : "text-entrada",
             )}
           >
-            {totalLimite === 0
+            {totalRef === 0
               ? "—"
               : estouradas.length
-                ? `${estouradas.length} estourada${estouradas.length > 1 ? "s" : ""}`
-                : "Dentro do plano"}
+                ? `${estouradas.length} acima`
+                : "Tudo dentro"}
           </p>
           <p className="text-sm text-suave">
             {estouradas.map((e) => e.nome).join(", ") ||
-              (totalLimite
-                ? "Nenhuma categoria passou do limite"
+              (totalRef
+                ? "Nenhuma categoria passou da referência"
                 : "Defina limites abaixo")}
           </p>
         </div>
@@ -163,13 +215,32 @@ export default function Orcamento() {
       <Painel
         titulo="Limite por categoria"
         sub={
-          ehAtual
+          (ehAtual
             ? "A marca na barra mostra até onde o gasto deveria ir hoje, se fosse distribuído pelo mês."
-            : `Limites aplicados a ${nomeMes(mes)}.`
+            : `Referências aplicadas a ${nomeMes(mes)}.`) +
+          (mesesMedia
+            ? ` Sem limite definido, vale a média ${mesesMedia === 1 ? "do mês anterior" : `dos últimos ${mesesMedia} meses`}.`
+            : "")
         }
         acao={
           editando ? (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Botao
+                tamanho="sm"
+                variante="fantasma"
+                title="Coloca a média (arredondada para cima, de 10 em 10) nas categorias ainda sem limite"
+                onClick={() =>
+                  setRascunho((r) => {
+                    const n = { ...r };
+                    for (const l of linhas)
+                      if (!n[l.id]?.trim() && l.media >= 1)
+                        n[l.id] = valorParaCampo(Math.ceil(l.media / 10) * 10);
+                    return n;
+                  })
+                }
+              >
+                Preencher com a média
+              </Botao>
               <Botao
                 tamanho="sm"
                 variante="fantasma"
@@ -215,7 +286,7 @@ export default function Orcamento() {
                         onChange={(e) =>
                           setRascunho((r) => ({ ...r, [l.id]: e.target.value }))
                         }
-                        placeholder="sem limite"
+                        placeholder={l.media >= 1 ? `média ${valorParaCampo(Math.round(l.media))}` : "sem limite"}
                         className="num h-9 w-28 bg-transparent px-2 text-right text-sm text-texto placeholder:text-fraco focus:outline-none"
                       />
                     </div>
@@ -224,40 +295,37 @@ export default function Orcamento() {
                   <span className="num shrink-0 text-sm text-suave">
                     <span
                       className={cx(
-                        l.orcamento && l.gasto > l.orcamento
-                          ? "text-saida"
-                          : "text-texto",
+                        l.ref && l.gasto > l.ref ? "text-saida" : "text-texto",
                       )}
                     >
                       {dinheiro(l.gasto)}
                     </span>
-                    {l.orcamento ? <> de {dinheiro(l.orcamento)}</> : null}
+                    {l.ref ? <> de {dinheiro(l.ref)}</> : null}
                   </span>
                 )}
               </div>
               {!editando && (
                 <div className="mt-2">
-                  {l.orcamento ? (
+                  {l.ref ? (
                     <>
                       <Barra
                         valor={l.gasto}
-                        max={l.orcamento}
+                        max={l.ref}
                         cor={l.cor}
-                        marca={ehAtual ? l.orcamento * fracaoMes : undefined}
+                        marca={ehAtual ? l.ref * fracaoMes : undefined}
                       />
                       <p className="num mt-1.5 text-[12.5px] text-fraco">
-                        {l.gasto <= l.orcamento
-                          ? `Restam ${dinheiro(l.orcamento - l.gasto)}`
-                          : `Passou ${dinheiro(l.gasto - l.orcamento)}`}
-                        {l.media > 0 &&
-                          ` · média dos últimos 3 meses ${dinheiro(l.media)}`}
+                        {l.gasto <= l.ref
+                          ? `Restam ${dinheiro(l.ref - l.gasto)}`
+                          : `Passou ${dinheiro(l.gasto - l.ref)}`}
+                        {l.pelaMedia
+                          ? " · pela média (sem limite definido)"
+                          : l.media > 0 && ` · média ${dinheiro(l.media)}`}
                       </p>
                     </>
                   ) : (
                     <p className="num text-[12.5px] text-fraco">
-                      Sem limite
-                      {l.media > 0 &&
-                        ` · média dos últimos 3 meses ${dinheiro(l.media)}`}
+                      Sem limite e sem gastos nos meses anteriores
                     </p>
                   )}
                 </div>
