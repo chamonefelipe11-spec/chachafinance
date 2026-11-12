@@ -16,7 +16,7 @@ if (!URL_SB || !CHAVE || !SENHA) {
 
 const TABELAS = [
   'financas', 'disciplinas', 'agenda', 'contas', 'categorias', 'metas', 'acertos', 'faturas_pagas',
-  'recorrencias', 'regras', 'importacoes', 'aulas', 'presencas',
+  'recorrencias', 'regras', 'importacoes', 'aulas', 'presencas', 'quadro_colunas', 'cards',
 ];
 
 async function lerTabela(t) {

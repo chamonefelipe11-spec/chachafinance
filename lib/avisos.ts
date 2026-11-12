@@ -1,7 +1,9 @@
 // Monta os avisos do dia e o resumo do mês (roda no servidor, no cron diário).
 import type {
   Acerto,
+  Card,
   Categoria,
+  ColunaQuadro,
   Conta,
   Disciplina,
   Evento,
@@ -28,6 +30,7 @@ export const TIPOS_AVISO = [
   { id: "contas", nome: "Conta fixa vencendo amanhã" },
   { id: "agenda", nome: "Provas e compromissos de amanhã" },
   { id: "orcamento", nome: "Categoria passando de 90% do limite" },
+  { id: "projetos", nome: "Card de projeto com prazo amanhã" },
   { id: "resumo", nome: "Resumo do mês, todo dia 1º" },
 ] as const;
 export type TipoAviso = (typeof TIPOS_AVISO)[number]["id"];
@@ -41,6 +44,8 @@ export interface DadosAviso {
   eventos: Evento[];
   acertos: Acerto[];
   metas: Meta[];
+  cards?: Card[];
+  colunasQuadro?: ColunaQuadro[];
 }
 
 export interface Mensagem {
@@ -123,6 +128,21 @@ export function montarAvisos(d: DadosAviso, hoje: string): Mensagem[] {
         para: e.quem === "Ambos" ? null : (e.quem as Pessoa),
       });
     }
+  }
+
+  // Cards de projeto com prazo amanhã (fora das colunas de concluídos)
+  const feitas = new Set((d.colunasQuadro || []).filter((c) => c.concluida).map((c) => c.id));
+  for (const c of d.cards || []) {
+    if (c.prazo?.slice(0, 10) !== amanha || feitas.has(String(c.coluna_id))) continue;
+    const lista = Array.isArray(c.checklist) ? c.checklist : [];
+    const faltam = lista.filter((i) => !i.feito).length;
+    msgs.push({
+      tipo: "projetos",
+      titulo: `Prazo amanhã: ${c.titulo}`,
+      corpo: [c.etiqueta, lista.length ? `${faltam} de ${lista.length} itens faltando` : ""].filter(Boolean).join(" · ") || "Projetos",
+      url: "/#projetos",
+      para: c.quem === "Ambos" ? null : (c.quem as Pessoa),
+    });
   }
 
   // Orçamento: avisa só no dia em que a categoria passa de 90%

@@ -7,6 +7,7 @@ Finanças, faculdade e agenda do Chamone e da Letícia. Next.js 16 + Supabase, p
 1. `supabase/migracao.sql` — contas, categorias, metas, acerto, faturas (v2).
 2. `supabase/fase0-seguranca.sql` — só os logins do casal acessam (rode a etapa 1, confira os e-mails, depois a etapa 2).
 3. `supabase/fase2a5.sql` — transferências, saldo, contas fixas, importação, avisos, grade da faculdade.
+4. `supabase/projetos.sql` — quadro de projetos (cards e Gantt).
 
 Todos só acrescentam tabelas/colunas e podem ser rodados de novo. `fase0-desfazer.sql` volta a regra de acesso antiga.
 Desligue o cadastro público em *Authentication → Sign In / Providers → Allow new users to sign up*.
@@ -53,6 +54,7 @@ lib/finance.ts            resumo do mês, faturas, saldos, contas fixas, acerto,
 lib/importar.ts           CSV, OFX, texto de OCR/PDF → lançamentos para revisão
 lib/ocr.ts                OCR e leitura de PDF no navegador
 lib/store.ts              leitura (paginada) e escrita no Supabase
+lib/projetos.ts           quadro: etiquetas, prazos, ordem dos cards, datas do Gantt
 lib/backup.ts             backup e restauração (mesmo formato do backup semanal)
 supabase/                 SQLs
 ```
@@ -64,4 +66,6 @@ supabase/                 SQLs
 - **Contas fixas** geram o lançamento do mês atual e do próximo; no cartão/vale entram pagas, na conta ficam "a pagar".
 - **Fatura**: compras a partir do dia de fechamento caem na fatura seguinte.
 - **Acerto do casal**: despesa paga por um com "Dividir com…" gera dívida do outro; conta conjunta não gera.
+- **Projetos**: cards numa coluna marcada como "concluídos" contam como feitos; o Gantt usa início e prazo
+  (só um dos dois vira barra de um dia). "Acompanhar gastos" soma a categoria escolhida desde o início do card.
 - **Faculdade**: nota em branco = prova pendente; faltas vêm das aulas marcadas quando existem.

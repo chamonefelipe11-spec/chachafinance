@@ -8,6 +8,7 @@ import {
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
 } from "react";
 import {
   ChevronLeft,
@@ -184,6 +185,19 @@ export function Entrada({
   ...props
 }: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cx(estiloCampo, "h-11", className)} />;
+}
+
+export function AreaTexto({
+  className,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      rows={3}
+      {...props}
+      className={cx(estiloCampo, "min-h-[84px] resize-y py-2.5 leading-relaxed", className)}
+    />
+  );
 }
 
 export function Seletor({

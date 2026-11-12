@@ -10,7 +10,7 @@ import {
 } from "@/lib/avisos";
 import { definirContas } from "@/lib/finance";
 import { somarMeses } from "@/lib/format";
-import type { AvisoConfig, Conta, Pessoa } from "@/lib/types";
+import type { AvisoConfig, Card, ColunaQuadro, Conta, Pessoa } from "@/lib/types";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -65,6 +65,8 @@ export async function GET(req: Request) {
     configs,
     inscricoes,
     membros,
+    cards,
+    colunasQuadro,
   ] = await Promise.all([
     lerTudo<DadosAviso["transacoes"][number]>(sb, "financas"),
     lerTudo<Conta>(sb, "contas"),
@@ -83,6 +85,8 @@ export async function GET(req: Request) {
       auth: string;
     }>(sb, "push_inscricoes"),
     lerTudo<{ email: string; nome: string | null }>(sb, "membros"),
+    lerTudo<Card>(sb, "cards"),
+    lerTudo<ColunaQuadro>(sb, "quadro_colunas"),
   ]);
   const num = <T extends { valor: unknown }>(t: T): T => ({
     ...t,
@@ -104,6 +108,8 @@ export async function GET(req: Request) {
     eventos,
     acertos: acertos.map(num),
     metas,
+    cards,
+    colunasQuadro,
   };
   definirContas(contas);
 

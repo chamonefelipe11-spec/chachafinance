@@ -256,7 +256,9 @@ export function faturasDoCartao(
 /** A fatura que importa agora: a fechada que ainda vai vencer, senão a aberta. */
 export function faturaEmFoco(faturas: Fatura[]): Fatura | undefined {
   const hoje = hojeISO();
+  // Fatura vencida e ainda não marcada como paga vem primeiro (até 10 dias depois do vencimento)
   return (
+    faturas.find((f) => f.status === "vencida") ||
     faturas.find((f) => f.status === "fechada" && f.vencimento >= hoje) ||
     faturas.find((f) => f.status === "aberta")
   );

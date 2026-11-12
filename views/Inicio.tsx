@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import { ArrowRight, CalendarClock, CreditCard, Repeat } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarClock,
+  CreditCard,
+  Repeat,
+  SquareKanban,
+} from "lucide-react";
 import { useApp, corCategoria } from "@/components/contexto";
 import {
   Avatar,
@@ -123,7 +129,7 @@ export default function Inicio() {
       titulo: string;
       detalhe: string;
       valor?: number;
-      tipo: "fatura" | "fixa" | "evento";
+      tipo: "fatura" | "fixa" | "evento" | "card";
     }[] = [];
     for (const c of contas.filter(cartaoConfigurado)) {
       for (const f of faturasDoCartao(transacoes, c, faturasPagas)) {
@@ -180,6 +186,18 @@ export default function Inicio() {
           tipo: "evento",
         });
       }
+    }
+    const feitas = new Set(
+      dados.colunasQuadro.filter((k) => k.concluida).map((k) => k.id),
+    );
+    for (const c of dados.cards) {
+      if (c.prazo && c.prazo >= hoje && c.prazo <= limite && !feitas.has(c.coluna_id))
+        itens.push({
+          data: c.prazo,
+          titulo: c.titulo,
+          detalhe: c.etiqueta ? `Prazo · ${c.etiqueta}` : "Prazo do card",
+          tipo: "card",
+        });
     }
     return itens.sort((a, b) => a.data.localeCompare(b.data)).slice(0, 7);
   })();
@@ -528,7 +546,9 @@ export default function Inicio() {
                         ? CreditCard
                         : p.tipo === "fixa"
                           ? Repeat
-                          : CalendarClock;
+                          : p.tipo === "card"
+                            ? SquareKanban
+                            : CalendarClock;
                     const dias = diffDias(hoje, p.data);
                     return (
                       <li key={i} className="flex items-center gap-3 py-2.5">

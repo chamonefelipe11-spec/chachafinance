@@ -24,6 +24,8 @@ const ORDEM_RESTAURAR = [
   "aulas",
   "presencas",
   "agenda",
+  "quadro_colunas",
+  "cards",
 ];
 
 export interface Backup {

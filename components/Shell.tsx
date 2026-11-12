@@ -22,6 +22,7 @@ import {
   FileUp,
   Eye,
   EyeOff,
+  SquareKanban,
 } from "lucide-react";
 import type { Aba } from "@/lib/types";
 import { cx, Botao } from "./ui";
@@ -43,6 +44,7 @@ const DINHEIRO: Item[] = [
 const VIDA: Item[] = [
   { aba: "faculdade", nome: "Faculdade", icone: GraduationCap },
   { aba: "agenda", nome: "Agenda", icone: CalendarDays },
+  { aba: "projetos", nome: "Projetos", icone: SquareKanban },
 ];
 const AJUSTES: Item = { aba: "ajustes", nome: "Ajustes", icone: Settings2 };
 
@@ -55,7 +57,9 @@ export const rotuloNovo = (aba: Aba) =>
       ? "Novo compromisso"
       : aba === "metas"
         ? "Nova meta"
-        : "Novo lançamento";
+        : aba === "projetos"
+          ? "Novo card"
+          : "Novo lançamento";
 
 function Marca() {
   return (

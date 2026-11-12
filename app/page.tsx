@@ -10,7 +10,7 @@ import {
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { useDados, TABELAS_NOVAS } from "@/lib/store";
+import { useDados, TABELAS_NOVAS, TABELAS_PROJETOS } from "@/lib/store";
 import {
   definirContas,
   mapaCategorias,
@@ -49,6 +49,7 @@ import Ajustes from "@/views/Ajustes";
 import Patrimonio from "@/views/Patrimonio";
 import ContasFixas from "@/views/ContasFixas";
 import Importar from "@/views/Importar";
+import Projetos, { EVENTO_NOVO_CARD } from "@/views/Projetos";
 
 const ABAS: Aba[] = [
   "inicio",
@@ -63,6 +64,7 @@ const ABAS: Aba[] = [
   "importar",
   "faculdade",
   "agenda",
+  "projetos",
   "ajustes",
 ];
 
@@ -191,6 +193,8 @@ export default function App() {
       abrir({ tipo: "disciplina", editando: null, aluno });
     else if (aba === "agenda") abrir({ tipo: "evento", editando: null });
     else if (aba === "metas") abrir({ tipo: "meta", editando: null });
+    else if (aba === "projetos")
+      window.dispatchEvent(new Event(EVENTO_NOVO_CARD));
     else abrir({ tipo: "transacao", editando: null });
   }, [aba, aluno, abrir]);
 
@@ -342,9 +346,11 @@ export default function App() {
   if (verificando) return <Carregando />;
   if (!sessao) return <Login />;
 
+  // O quadro de projetos tem o próprio aviso, dentro da tela
+  const faltandoBase = faltando.filter((t) => !TABELAS_PROJETOS.includes(t));
   const faltaMigracao =
-    faltando.length > 0 && faltando.length <= TABELAS_NOVAS.length;
-  const qualSql = faltando.includes("contas")
+    faltandoBase.length > 0 && faltandoBase.length <= TABELAS_NOVAS.length;
+  const qualSql = faltandoBase.includes("contas")
     ? "migracao.sql e depois fase2a5.sql"
     : "fase2a5.sql";
 
@@ -391,6 +397,7 @@ export default function App() {
               {aba === "patrimonio" && <Patrimonio />}
               {aba === "contasfixas" && <ContasFixas />}
               {aba === "importar" && <Importar />}
+              {aba === "projetos" && <Projetos />}
             </>
           )}
         </Shell>

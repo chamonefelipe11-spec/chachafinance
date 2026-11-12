@@ -185,6 +185,39 @@ export interface Evento {
   concluido: boolean;
 }
 
+export interface ColunaQuadro {
+  id: string;
+  nome: string;
+  ordem: number;
+  /** Cards nesta coluna contam como feitos */
+  concluida: boolean;
+}
+
+export interface ItemChecklist {
+  id: string;
+  texto: string;
+  feito: boolean;
+}
+
+export interface Card {
+  id: string;
+  coluna_id: string;
+  titulo: string;
+  descricao: string | null;
+  quem: Quem;
+  /** Projeto/assunto: Casa, Faculdade, Viagem… */
+  etiqueta: string | null;
+  inicio: string | null; // YYYY-MM-DD
+  prazo: string | null; // YYYY-MM-DD
+  ordem: number;
+  checklist: ItemChecklist[];
+  /** Liga o card aos gastos dessa categoria */
+  categoria: string | null;
+  orcamento: number | null;
+  concluido_em: string | null;
+  created_at?: string;
+}
+
 export type Aba =
   | "inicio"
   | "lancamentos"
@@ -198,4 +231,5 @@ export type Aba =
   | "patrimonio"
   | "contasfixas"
   | "importar"
+  | "projetos"
   | "ajustes";

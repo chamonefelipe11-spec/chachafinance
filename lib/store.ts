@@ -6,7 +6,9 @@ import { CATEGORIAS_PADRAO, CONTAS_PADRAO } from "./defaults";
 import type {
   Acerto,
   Aula,
+  Card,
   Categoria,
+  ColunaQuadro,
   Conta,
   Disciplina,
   Evento,
@@ -34,6 +36,8 @@ export interface Dados {
   importacoes: Importacao[];
   aulas: Aula[];
   presencas: Presenca[];
+  colunasQuadro: ColunaQuadro[];
+  cards: Card[];
 }
 
 const VAZIO: Dados = {
@@ -50,6 +54,8 @@ const VAZIO: Dados = {
   importacoes: [],
   aulas: [],
   presencas: [],
+  colunasQuadro: [],
+  cards: [],
 };
 
 const num = (v: unknown) =>
@@ -78,6 +84,20 @@ function normalizarTransacao(t: Record<string, unknown>): Transacao {
   };
 }
 
+function normalizarCard(c: Card): Card {
+  return {
+    ...c,
+    id: String(c.id),
+    coluna_id: String(c.coluna_id),
+    quem: (c.quem || "Ambos") as Card["quem"],
+    ordem: Number(c.ordem) || 0,
+    inicio: c.inicio ? String(c.inicio).slice(0, 10) : null,
+    prazo: c.prazo ? String(c.prazo).slice(0, 10) : null,
+    orcamento: num(c.orcamento),
+    checklist: Array.isArray(c.checklist) ? c.checklist : [],
+  };
+}
+
 /** Todas as tabelas que vieram depois da v1 (criadas pelos arquivos em supabase/). */
 export const TABELAS_NOVAS = [
   "contas",
@@ -90,7 +110,12 @@ export const TABELAS_NOVAS = [
   "importacoes",
   "aulas",
   "presencas",
+  "quadro_colunas",
+  "cards",
 ] as const;
+
+/** Tabelas do quadro de projetos (supabase/projetos.sql) */
+export const TABELAS_PROJETOS = ["quadro_colunas", "cards"];
 
 /** Lê a tabela inteira, de 1000 em 1000 (o Supabase devolve no máximo 1000 linhas por pedido). */
 export async function lerTudo<T>(
@@ -133,6 +158,8 @@ export function useDados() {
       imps,
       aulas,
       pres,
+      cols,
+      cards,
     ] = await Promise.all([
       lerTudo<Record<string, unknown>>("financas", {
         coluna: "data",
@@ -156,6 +183,8 @@ export function useDados() {
       }),
       lerTudo<Aula>("aulas", { coluna: "dia_semana" }),
       lerTudo<Presenca>("presencas", { coluna: "data", crescente: false }),
+      lerTudo<ColunaQuadro>("quadro_colunas", { coluna: "ordem" }),
+      lerTudo<Card>("cards", { coluna: "ordem" }),
     ]);
 
     const falta: string[] = [];
@@ -232,6 +261,12 @@ export function useDados() {
         disciplina_id: String(p.disciplina_id),
         peso: Number(p.peso) || 1,
       })),
+      colunasQuadro: opcional("quadro_colunas", cols).map((c) => ({
+        ...id(c),
+        ordem: Number(c.ordem) || 0,
+        concluida: !!c.concluida,
+      })),
+      cards: opcional("cards", cards).map(normalizarCard),
     });
     setFaltando(falta);
     setCarregando(false);
