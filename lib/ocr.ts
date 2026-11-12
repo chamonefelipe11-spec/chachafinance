@@ -104,10 +104,19 @@ async function prepararImagem(fonte: Blob | HTMLCanvasElement): Promise<HTMLCanv
   return c;
 }
 
-export async function textoDeImagem(arquivo: Blob | HTMLCanvasElement, progresso?: Progresso): Promise<string> {
+/**
+ * "bloco" (padrão) mantém descrição e valor na mesma linha, bom para extratos.
+ * "esparso" acha cada pedaço de texto solto, bom para conversas (balões espalhados pela tela).
+ */
+export async function textoDeImagem(
+  arquivo: Blob | HTMLCanvasElement,
+  progresso?: Progresso,
+  modo: 'bloco' | 'esparso' = 'bloco',
+): Promise<string> {
   avisarProgresso = progresso;
   const w = await obterWorker();
   const canvas = await prepararImagem(arquivo);
+  await w.setParameters({ tessedit_pageseg_mode: modo === 'esparso' ? '11' : '6', preserve_interword_spaces: '1' });
   const r = await w.recognize(canvas);
   return r.data.text || '';
 }

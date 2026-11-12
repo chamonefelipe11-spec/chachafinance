@@ -1,7 +1,7 @@
 // Leitura de extratos (CSV/OFX) e preparação das linhas para a tela de revisão.
 import type { Conta, Quem, Regra, Transacao } from "./types";
 import { descricaoBase } from "./finance";
-import { diffDias } from "./format";
+import { dataDeISO, diffDias, somarDiasISO } from "./format";
 
 export type TipoLinha = "despesa" | "receita" | "transferencia";
 
@@ -10,10 +10,16 @@ export interface LinhaBruta {
   descricao: string;
   valor: number; // com sinal: negativo = saída da conta
   parcela?: { atual: number; total: number } | null;
+  /** Conta/cartão identificado na própria linha (mensagens do WhatsApp) */
+  conta?: string | null;
+  /** O dia não aparece no print (mensagem acima do primeiro "Hoje/Ontem/sábado") */
+  dataIncerta?: boolean;
 }
 
 export interface LinhaImport {
   chave: string;
+  /** Conta ou cartão onde o lançamento entra */
+  conta: string;
   incluir: boolean;
   data: string;
   descricao: string;
@@ -227,7 +233,20 @@ const PALAVRAS: [RegExp, string][] = [
     "Salário / Renda",
   ],
   [/reembolso|estorno|cashback/, "Reembolso"],
+  [/presente|aniversario|natal/, "Presentes"],
+  [/compras? (de |da |pra |para )?casa|alimentac/, "Alimentação / Mercado"],
 ];
+
+/** Categoria provável pelo tipo do benefício (Caju VA → mercado, mobilidade → transporte…). */
+function categoriaDoBeneficio(conta: Conta): string | null {
+  if (conta.tipo !== "beneficio") return null;
+  const n = normalizar(conta.nome);
+  if (/mobilidade|transporte/.test(n)) return "Transporte / Uber";
+  if (/\bva\b|aliment|mercado/.test(n)) return "Alimentação / Mercado";
+  if (/\bvr\b|refei/.test(n)) return "FastFood / iFood";
+  if (/cultura/.test(n)) return "Lazer / Passeio";
+  return null;
+}
 
 const PAGAMENTO_FATURA =
   /pagamento (de )?fatura|pgto fatura|pagto cartao|pagamento cartao|fatura (do )?cartao/;
@@ -335,6 +354,8 @@ export function prepararLinhas(
       }
     }
 
+    if (!aviso && b.dataIncerta) aviso = "Confira a data: o dia não aparece no print";
+
     // 3) Categoria: regra > mesmo nome já usado > palavras conhecidas
     if (tipo !== "transferencia") {
       const regra = regras.find(
@@ -366,12 +387,14 @@ export function prepararLinhas(
         const achou = PALAVRAS.find(([re]) => re.test(n));
         if (achou && (saida ? achou[1] !== "Salário / Renda" : true))
           categoria = achou[1];
+        else if (saida) categoria = categoriaDoBeneficio(conta) || categoria;
         if (!saida && !achou) categoria = "Reembolso";
       }
     }
 
     return {
       chave: `${i}-${hash}`,
+      conta: conta.nome,
       incluir,
       data: b.data,
       descricao: b.descricao.replace(/\s+/g, " ").trim(),
@@ -586,5 +609,211 @@ export function semRepetidosEntrePrints(grupos: LinhaBruta[][]): LinhaBruta[] {
     }
     for (const [k, n] of contagem) vistos.set(k, Math.max(vistos.get(k) || 0, n));
   }
+  return out;
+}
+
+// ---------------- Mensagens do WhatsApp ("-24,89 caju") ----------------
+
+const DIAS_SEMANA_WPP = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"];
+
+/** Mensagem curta de gasto: começa com sinal (ou R$) e valor; a hora do WhatsApp fica no fim. */
+// O OCR às vezes troca o "-" por aspas ou til
+const MSG_GASTO =
+  /^([+\-−–—~“”"'‘’`´]+)?\s*(?:r\s?\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?![\d/])\s*(.*)$/i;
+// Hora da mensagem no fim ("12:32", ou "1232" quando o OCR perde os dois-pontos) e os tiques de lida
+const HORA_FIM =
+  /\s*(?:editad[ao]\s*)?\b(?:(?:[01]\d|2[0-3])[0-5]\d|(?:[01]?\d|2[0-3])\s?[:.;,\-]\s?[0-5]\d)\b[\s yv/&,.;:'"✓✔*\-]{0,6}$/i;
+const sinalDeMenos = (s: string) => /[\-−–—~“”"'‘’`´]/.test(s);
+
+/** O print pega outras janelas ao lado: blocos separados por muitos espaços são tratados à parte. */
+const pedacosDaLinha = (bruta: string) =>
+  bruta
+    .split(/\s{3,}|\t+/)
+    .map((x) => x.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+/** O dia que um separador do WhatsApp ("Hoje", "Ontem", "sábado", "12/11/2026") representa. */
+export function dataDoSeparador(linha: string, ref: string): string | null {
+  const n = normalizar(linha).replace(/[^a-z0-9/ -]/g, "").trim();
+  if (!n || n.length > 24) return null;
+  if (n === "hoje") return ref;
+  if (n === "ontem") return somarDiasISO(ref, -1);
+  const dia = DIAS_SEMANA_WPP.findIndex((d) => n === d || n === `${d}-feira` || n === `${d} feira` || n === `${d}feira`);
+  if (dia >= 0) {
+    // O WhatsApp usa o nome do dia para a última semana (antes de ontem)
+    for (let k = 2; k <= 7; k++) {
+      const d = somarDiasISO(ref, -k);
+      if (dataDeISO(d).getDay() === dia) return d;
+    }
+  }
+  const m = n.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    const ano = m[3].length === 2 ? `20${m[3]}` : m[3];
+    const iso = `${ano}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    return ehDataISO(iso) ? iso : null;
+  }
+  return null;
+}
+
+/** Quantas linhas parecem mensagens de gasto: decide se o print é de conversa. */
+export function pareceWhatsApp(texto: string): boolean {
+  const linhas = texto.split(/\r?\n/).flatMap(pedacosDaLinha);
+  let comHora = 0;
+  let comSinal = 0;
+  for (const l of linhas) {
+    const m = l.match(MSG_GASTO);
+    if (!m || !/[a-zA-ZÀ-ú]{3}/.test(m[3] || "")) continue;
+    if ((m[1] || /^r\s?\$/i.test(l)) && HORA_FIM.test(m[3] || "")) comHora++;
+    if (m[1]) comSinal++;
+  }
+  const separadores = linhas.filter((l) => /^(hoje|ontem)$/i.test(l) || /feira$|^s[aá]bado$|^domingo$/i.test(l)).length;
+  return comHora >= 2 || (comHora >= 1 && separadores >= 1) || (comSinal >= 2 && separadores >= 1);
+}
+
+/** Uma letra trocada, sobrando ou faltando ("caiu" ≈ "caju"): erro comum do OCR. */
+function quaseIgual(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let erros = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i++;
+      j++;
+      continue;
+    }
+    if (++erros > 1) return false;
+    if (a.length > b.length) i++;
+    else if (b.length > a.length) j++;
+    else {
+      i++;
+      j++;
+    }
+  }
+  return erros + (a.length - i) + (b.length - j) <= 1;
+}
+
+/** Troca palavras quase iguais ao nome de uma conta pelo nome certo ("caiu" → "caju"). */
+function corrigirNomesDeConta(texto: string, contas: Conta[]): string {
+  const tokens = new Set(
+    contas.flatMap((c) => normalizar(c.nome).split(/[^a-z0-9]+/)).filter((t) => t.length >= 4 && !GENERICAS_CONTA.has(t)),
+  );
+  return texto.replace(/[A-Za-zÀ-ú]{4,}/g, (w) => {
+    const n = normalizar(w);
+    if (tokens.has(n)) return w;
+    const certo = [...tokens].find((t) => quaseIgual(n, t));
+    return certo || w;
+  });
+}
+
+const PALAVRAS_SUBCONTA: [RegExp, RegExp][] = [
+  [/aliment|mercado|\bva\b/, /\bva\b|aliment/],
+  [/refeic|almoc|\bvr\b|restaurante|marmit/, /\bvr\b|refei/],
+  [/bhbus|onibus|metro|move\b|mobilidade|uber|gasolina|combust|transporte/, /mobilidade|transporte/],
+  [/cultura|cinema|livro|teatro/, /cultura/],
+];
+const GENERICAS_CONTA = new Set(["cartao", "conta", "corrente", "banco", "pix", "investimentos", "padrao"]);
+
+/**
+ * Descobre de qual conta é a mensagem pelas palavras dela ("caju alimentação" → Caju VA,
+ * "intercred" → Cartão Intercred, "débito" → conta corrente). Sem pista, fica a conta escolhida.
+ */
+export function contaDaMensagem(texto: string, contas: Conta[], padrao: string, uso: Map<string, number>): string {
+  const n = ` ${normalizar(texto)} `;
+  const palavras = n.split(/[^a-z0-9]+/).filter(Boolean);
+  const ativas = contas.filter((c) => c.ativo !== false);
+  let melhor: { nome: string; pontos: number } | null = null;
+  for (const c of ativas) {
+    const tokens = normalizar(c.nome).split(/[^a-z0-9]+/).filter((t) => t.length >= 2 && !GENERICAS_CONTA.has(t));
+    let pontos = tokens.filter((t) => palavras.some((p) => p === t || (t.length >= 4 && p.length >= 4 && quaseIgual(p, t)))).length * 10;
+    if (!pontos) continue;
+    for (const [palavra, nomeConta] of PALAVRAS_SUBCONTA)
+      if (palavra.test(n) && nomeConta.test(normalizar(c.nome))) pontos += 5;
+    pontos += Math.min(uso.get(c.nome) || 0, 9) / 10; // desempate: a conta mais usada
+    if (c.nome === padrao) pontos += 0.05;
+    if (!melhor || pontos > melhor.pontos) melhor = { nome: c.nome, pontos };
+  }
+  if (melhor) return melhor.nome;
+  if (/\b(debito|pix|transferencia|ted)\b/.test(n)) {
+    const corrente = ativas.filter((c) => c.tipo === "corrente");
+    return (
+      corrente.find((c) => c.nome === padrao)?.nome ||
+      [...corrente].sort((a, b) => (uso.get(b.nome) || 0) - (uso.get(a.nome) || 0))[0]?.nome ||
+      padrao
+    );
+  }
+  return padrao;
+}
+
+/**
+ * Lê prints de uma conversa em que os gastos são anotados como mensagens:
+ * "-24,89 caju", "-R$44,97 intercred", "-109,98 (2x54,98) presente".
+ * `ref` é o dia em que o print foi tirado (o "Hoje" da conversa).
+ */
+export function lerMensagensWhatsApp(
+  texto: string,
+  ref: string,
+  contas: Conta[],
+  contaPadrao: string,
+  transacoes: Transacao[] = [],
+): LinhaBruta[] {
+  const uso = new Map<string, number>();
+  const desde = somarDiasISO(ref, -90);
+  for (const t of transacoes) if (t.data >= desde) uso.set(t.cartao, (uso.get(t.cartao) || 0) + 1);
+
+  const out: LinhaBruta[] = [];
+  let data: string | null = null;
+  for (const linha of texto.split(/\r?\n/).flatMap(pedacosDaLinha)) {
+    const sep = dataDoSeparador(linha, ref);
+    if (sep) {
+      data = sep;
+      continue;
+    }
+    const m = linha.match(MSG_GASTO);
+    if (!m) continue;
+    const temSinal = !!m[1];
+    const temHora = HORA_FIM.test(m[3] || "");
+    // Sem sinal nem "R$" só vale se tiver a hora da mensagem no fim (evita números soltos de comprovantes)
+    if (!temSinal && !/^r\s?\$/i.test(linha) && !temHora) continue;
+    let resto = (m[3] || "").replace(HORA_FIM, "").trim();
+    resto = resto.replace(/\beditad[ao]\b/gi, "").replace(/[✓✔√]+/g, "").trim();
+    if (!/[a-zA-ZÀ-ú]{3}/.test(resto)) continue;
+    const bruto = m[2];
+    let valor = bruto.includes(",")
+      ? Number(bruto.replace(/\./g, "").replace(",", "."))
+      : /^\d{1,3}(\.\d{3})+$/.test(bruto)
+        ? Number(bruto.replace(/\./g, ""))
+        : Number(bruto);
+    if (!(valor > 0)) continue;
+    // "(2x54,98)": compra parcelada; entra a parcela, e as próximas podem ser criadas
+    let parcela: LinhaBruta["parcela"] = null;
+    const px = resto.match(/\(?\s*(\d{1,2})\s*x\s*(?:r\$\s*)?(\d+(?:[.,]\d{1,2})?)\s*\)?/i);
+    if (px && Number(px[1]) >= 2) {
+      const vp = Number(px[2].replace(",", "."));
+      if (vp > 0 && Math.abs(vp * Number(px[1]) - valor) <= Math.max(1, valor * 0.02)) {
+        parcela = { atual: 1, total: Number(px[1]) };
+        valor = vp;
+      }
+      resto = resto.replace(px[0], " ").replace(/\s+/g, " ").trim();
+    }
+    resto = corrigirNomesDeConta(resto, contas);
+    const entrada = /\+/.test(m[1] || "") && !sinalDeMenos(m[1] || "");
+    const conta = contaDaMensagem(resto, contas, contaPadrao, uso);
+    const descricao = resto.charAt(0).toUpperCase() + resto.slice(1);
+    out.push({
+      data: data || "",
+      descricao,
+      valor: entrada ? valor : -valor,
+      parcela,
+      conta,
+    });
+  }
+  // Mensagens antes do primeiro separador de dia: provavelmente do dia anterior a ele
+  const primeiro = out.find((l) => l.data)?.data;
+  for (const l of out)
+    if (!l.data) {
+      l.data = primeiro ? somarDiasISO(primeiro, -1) : ref;
+      l.dataIncerta = true;
+    }
   return out;
 }

@@ -21,17 +21,22 @@ import { avisar } from "@/lib/toast";
 import {
   dataBR,
   dinheiro,
+  diffDias,
   gerarId,
   hojeISO,
+  isoDeData,
   lerValor,
+  somarDiasISO,
   somarMesesISO,
 } from "@/lib/format";
 import { descricaoBase } from "@/lib/finance";
 import {
   chaveDescricao,
   lerCSV,
+  lerMensagensWhatsApp,
   lerOFX,
   lerTextoExtrato,
+  pareceWhatsApp,
   prepararLinhas,
   semRepetidosEntrePrints,
   type LinhaBruta,
@@ -59,6 +64,9 @@ export default function Importar() {
   const [criarFuturas, setCriarFuturas] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [regraDe, setRegraDe] = useState<LinhaImport | null>(null);
+  // Prints de conversa do WhatsApp: o "Hoje" do print e quais linhas vieram dele
+  const [diaPrint, setDiaPrint] = useState<string | null>(null);
+  const [chavesWpp, setChavesWpp] = useState<Set<string>>(new Set());
   const entrada = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const contaObj = dados.contas.find((c) => c.nome === conta);
@@ -72,6 +80,8 @@ export default function Importar() {
     setObservacao(null);
     setTextoLido("");
     setProgresso("");
+    setDiaPrint(null);
+    setChavesWpp(new Set());
     setEtapa("lendo");
     try {
       const brutas: LinhaBruta[] = [];
@@ -98,6 +108,7 @@ export default function Importar() {
         // Leitura no próprio aparelho: PDF pelo texto embutido (ou OCR se for escaneado), print por OCR
         const grupos: LinhaBruta[][] = [];
         const textos: string[] = [];
+        let conversa = false;
         for (let i = 0; i < paraIA.length; i++) {
           const f = paraIA[i];
           const rotulo = paraIA.length > 1 ? `${f.name} (${i + 1} de ${paraIA.length})` : f.name;
@@ -107,12 +118,28 @@ export default function Importar() {
             ? await textoDePDF(f, (p) => setProgresso(`${rotulo}: ${p}`))
             : await textoDeImagem(f, (p) => setProgresso(`${rotulo}: ${p}`));
           textos.push(`— ${f.name} —\n${texto.trim()}`);
-          grupos.push(lerTextoExtrato(texto, contaObj.tipo, hojeISO()));
+          if (!pdf && pareceWhatsApp(texto)) {
+            // Conversa com gastos anotados ("-24,89 caju"): o dia do print é quando a imagem foi salva
+            const salvo = f.lastModified ? isoDeData(new Date(f.lastModified)) : hojeISO();
+            const ref = salvo > hojeISO() ? hojeISO() : salvo;
+            const ler = (t: string) => lerMensagensWhatsApp(t, ref, dados.contas, contaObj.nome, dados.transacoes);
+            // Balões espalhados pela tela: a leitura "esparsa" pega melhor cada mensagem
+            setProgresso(`${rotulo}: lendo as mensagens…`);
+            const esparso = await textoDeImagem(f, (p) => setProgresso(`${rotulo}: mensagens ${p}`), "esparso");
+            const a = ler(texto);
+            const b = ler(esparso);
+            conversa = true;
+            setDiaPrint((d) => d || ref);
+            if (b.length >= a.length) textos[textos.length - 1] = `— ${f.name} —\n${esparso.trim()}`;
+            grupos.push(b.length >= a.length ? b : a);
+          } else grupos.push(lerTextoExtrato(texto, contaObj.tipo, hojeISO()));
         }
         setTextoLido(textos.join("\n\n"));
         brutas.push(...semRepetidosEntrePrints(grupos));
         if (!brutas.length)
           setObservacao("Li o arquivo mas não reconheci lançamentos. Abra “Ver o texto lido” para conferir.");
+        else if (conversa)
+          setObservacao("Mensagens lidas da conversa: a conta de cada uma veio das palavras (caju, intercred, débito…). Confira a conta, a data e o valor antes de importar.");
         else
           setObservacao("Lido por reconhecimento de texto no seu aparelho: confira datas e valores antes de importar.");
       }
@@ -120,15 +147,30 @@ export default function Importar() {
         throw new Error(
           "Não encontrei lançamentos nesses arquivos. Confira se é o extrato ou a fatura certa.",
         );
-      setLinhas(
-        prepararLinhas(brutas, {
-          conta: contaObj,
+      // Cada linha é preparada com a conta dela (no WhatsApp, cada mensagem pode ser de uma conta)
+      const porConta = new Map<string, LinhaBruta[]>();
+      for (const b of brutas) {
+        const nome = b.conta && dados.contas.some((c) => c.nome === b.conta) ? b.conta : contaObj.nome;
+        porConta.set(nome, [...(porConta.get(nome) || []), b]);
+      }
+      const prontas: LinhaImport[] = [];
+      const deConversa = new Set<string>();
+      for (const [nome, lista] of porConta) {
+        const preparadas = prepararLinhas(lista, {
+          conta: dados.contas.find((c) => c.nome === nome) || contaObj,
           contas: dados.contas,
           regras: dados.regras,
           transacoes: dados.transacoes,
           pessoaPadrao: pessoa,
-        }).sort((a, b) => b.data.localeCompare(a.data)),
-      );
+        });
+        preparadas.forEach((l, i) => {
+          l.chave = `${nome}-${l.chave}`;
+          if (lista[i].conta !== undefined) deConversa.add(l.chave);
+        });
+        prontas.push(...preparadas);
+      }
+      setChavesWpp(deConversa);
+      setLinhas(prontas.sort((a, b) => b.data.localeCompare(a.data)));
       setEtapa("revisar");
     } catch (e) {
       avisar(
@@ -154,6 +196,18 @@ export default function Importar() {
     .filter((l) => l.tipo === "receita")
     .reduce((a, l) => a + l.valor, 0);
 
+  const contasDasLinhas = [...new Set(linhas.map((l) => l.conta))];
+
+  function mudarDiaPrint(novo: string) {
+    if (!diaPrint || !novo) return;
+    const delta = diffDias(diaPrint, novo);
+    setDiaPrint(novo);
+    if (delta)
+      setLinhas((ls) =>
+        ls.map((l) => (chavesWpp.has(l.chave) ? { ...l, data: somarDiasISO(l.data, delta) } : l)),
+      );
+  }
+
   async function gravar() {
     if (!contaObj || !marcadas.length) return;
     setSalvando(true);
@@ -161,7 +215,7 @@ export default function Importar() {
     if (!faltando.includes("importacoes")) {
       const imp = await db.inserirDevolvendo<{ id: string }>("importacoes", {
         origem: arquivos.map((a) => a.split(".").pop()).join(","),
-        conta: contaObj.nome,
+        conta: [...new Set(marcadas.map((l) => l.conta))].join(", ").slice(0, 200),
         arquivo: arquivos.join(", ").slice(0, 300),
         qtd: marcadas.length,
       });
@@ -175,9 +229,7 @@ export default function Importar() {
         tipo: l.tipo,
         categoria: l.tipo === "transferencia" ? "Transferência" : l.categoria,
         cartao:
-          l.tipo === "transferencia"
-            ? l.conta_origem || contaObj.nome
-            : contaObj.nome,
+          l.tipo === "transferencia" ? l.conta_origem || l.conta : l.conta,
         conta_destino: l.tipo === "transferencia" ? l.conta_destino : null,
         quem: l.quem,
         divisao_pct:
@@ -192,7 +244,7 @@ export default function Importar() {
         const serie = dados.transacoes.find(
           (t) =>
             t.grupo_id &&
-            t.cartao === contaObj.nome &&
+            t.cartao === l.conta &&
             t.total_parcelas === l.parcela!.total &&
             Math.abs(t.valor - l.valor) < 0.01 &&
             chaveDescricao(t.descricao) === chaveDescricao(l.descricao),
@@ -283,7 +335,7 @@ export default function Importar() {
       <div className="space-y-5">
         <Cabecalho
           titulo="Revisar importação"
-          sub={`${contaObj?.nome} · ${linhas.length} lançamentos encontrados. Desmarque o que não deve entrar e corrija o que precisar.`}
+          sub={`${contasDasLinhas.length > 1 ? `${contasDasLinhas.length} contas` : contasDasLinhas[0] || contaObj?.nome} · ${linhas.length} lançamentos encontrados. Desmarque o que não deve entrar e corrija o que precisar.`}
           acoes={
             <Botao variante="fantasma" onClick={() => setEtapa("escolher")}>
               Cancelar
@@ -294,6 +346,24 @@ export default function Importar() {
           <p className="rounded-xl border border-alerta/30 bg-alerta/8 px-4 py-3 text-sm">
             {observacao}
           </p>
+        )}
+        {diaPrint && (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-linha-suave bg-painel px-4 py-3 text-sm">
+            <label htmlFor="dia-print" className="text-suave">
+              “Hoje” no print era
+            </label>
+            <input
+              id="dia-print"
+              type="date"
+              value={diaPrint}
+              max={hojeISO()}
+              onChange={(e) => mudarDiaPrint(e.target.value)}
+              className="h-9 rounded-lg border border-linha bg-campo px-2 text-sm text-texto"
+            />
+            <span className="text-[12.5px] text-fraco">
+              Se o print for de outro dia, mude aqui que as datas de “Hoje”, “Ontem” e dos dias da semana acompanham.
+            </span>
+          </div>
         )}
         {textoLido && (
           <details className="rounded-xl border border-linha-suave bg-painel px-4 py-3 text-sm">
@@ -343,6 +413,7 @@ export default function Importar() {
             setLinhas((ls) => [
               {
                 chave: `manual-${Date.now()}`,
+                conta: contaObj?.nome || "",
                 incluir: true,
                 data: hojeISO(),
                 descricao: "",
@@ -529,6 +600,14 @@ export default function Importar() {
             da lista de transações.
           </li>
           <li>
+            <span className="text-texto">Conversa do WhatsApp:</span> se você
+            anota os gastos em mensagens como “-24,89 caju” ou “-44,97
+            intercred”, mande o print da conversa. A conta sai das palavras
+            (caju alimentação, caju bhbus, débito…) e o dia, dos separadores
+            Hoje, Ontem e dos dias da semana. Sem pista de conta, vale a escolhida
+            acima.
+          </li>
+          <li>
             <span className="text-texto">
               Comprovante de Pix, nota fiscal ou cupom:
             </span>{" "}
@@ -637,6 +716,21 @@ function LinhaRevisao({
         </div>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2 pl-8">
+        <select
+          value={l.conta}
+          onChange={(e) => mudar({ conta: e.target.value })}
+          aria-label="Conta"
+          className="h-8 max-w-[170px] rounded-lg border border-linha bg-campo px-2 text-[13px] text-texto"
+        >
+          {!dados.contas.some((c) => c.nome === l.conta) && <option value={l.conta}>{l.conta}</option>}
+          {dados.contas
+            .filter((c) => c.ativo || c.nome === l.conta)
+            .map((c) => (
+              <option key={c.id} value={c.nome}>
+                {c.nome}
+              </option>
+            ))}
+        </select>
         <Segmentado
           tamanho="sm"
           valor={l.tipo}
