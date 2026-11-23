@@ -1,0 +1,12 @@
+services:
+  conversor-md:
+    build: .
+    container_name: conversor-md
+    restart: unless-stopped
+    ports:
+      - "8090:8000"
+    environment:
+      - MAX_MB=100
+      # Endereços extras que podem usar a API pelo navegador (além do chachafinance na Vercel)
+      - CORS_ORIGINS=
+    mem_limit: 1g

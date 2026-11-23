@@ -42,7 +42,7 @@ A aba Conversor transforma PDF, Word, PowerPoint e Excel em Markdown (.md) para 
 tokens. A conversão é feita pelo MarkItDown no serverchacha (container `conversor-md`), chamado direto do aparelho
 pelo Tailscale: o arquivo não passa pela Vercel nem pelo Supabase. PDFs escaneados, ou PDFs com o servidor fora de
 alcance, são lidos no próprio aparelho (pdf.js e OCR). O endereço do servidor fica salvo por aparelho, no botão
-**Servidor** da aba.
+**Servidor** da aba. O código do servidor está em `servidor/conversor-md` (veja o LEIA-ME de lá).
 
 ## Rodando localmente
 
