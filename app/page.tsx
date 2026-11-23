@@ -50,6 +50,7 @@ import Patrimonio from "@/views/Patrimonio";
 import ContasFixas from "@/views/ContasFixas";
 import Importar from "@/views/Importar";
 import Projetos, { EVENTO_NOVO_CARD } from "@/views/Projetos";
+import Conversor from "@/views/Conversor";
 
 const ABAS: Aba[] = [
   "inicio",
@@ -65,6 +66,7 @@ const ABAS: Aba[] = [
   "faculdade",
   "agenda",
   "projetos",
+  "conversor",
   "ajustes",
 ];
 
@@ -398,6 +400,7 @@ export default function App() {
               {aba === "contasfixas" && <ContasFixas />}
               {aba === "importar" && <Importar />}
               {aba === "projetos" && <Projetos />}
+              {aba === "conversor" && <Conversor />}
             </>
           )}
         </Shell>

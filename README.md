@@ -23,6 +23,7 @@ Desligue o cadastro público em *Authentication → Sign In / Providers → Allo
 | `VAPID_PRIVATE_KEY` | Secret | notificações no celular |
 | `CRON_SECRET` | Secret | protege o lembrete diário (`vercel.json`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Secret | o lembrete diário lê o banco (aceita `sb_secret_…`) |
+| `NEXT_PUBLIC_CONVERSOR_URL` | Config (opcional) | endereço do Conversor MD; também dá para salvar na própria aba |
 
 Depois de mudar variáveis, faça **Redeploy**.
 
@@ -34,6 +35,14 @@ O arquivo fica em Actions → Backup semanal → execução → Artifacts, e é 
 CSV e OFX são lidos no navegador. PDFs usam o texto embutido (pdf.js); prints e PDFs escaneados passam por OCR
 (tesseract.js, português) também no navegador — nada sai do aparelho. Os arquivos do leitor são copiados para
 `public/ocr` por `scripts/copiar-ocr.mjs` antes do build.
+
+## Conversor
+
+A aba Conversor transforma PDF, Word, PowerPoint e Excel em Markdown (.md) para mandar ao Claude gastando menos
+tokens. A conversão é feita pelo MarkItDown no serverchacha (container `conversor-md`), chamado direto do aparelho
+pelo Tailscale: o arquivo não passa pela Vercel nem pelo Supabase. PDFs escaneados, ou PDFs com o servidor fora de
+alcance, são lidos no próprio aparelho (pdf.js e OCR). O endereço do servidor fica salvo por aparelho, no botão
+**Servidor** da aba.
 
 ## Rodando localmente
 
@@ -51,7 +60,7 @@ Atalho no computador: tecla **n** abre um novo lançamento.
 app/page.tsx              login, carregamento e navegação
 app/api/cron/avisos       lembrete diário (Vercel Cron) por notificação
 components/               Shell (menu), ui, formulários, painéis de ajustes
-views/                    uma tela por seção
+views/                    uma tela por seção (Conversor.tsx: Markdown via serverchacha)
 lib/finance.ts            resumo do mês, faturas, saldos, contas fixas, acerto, notas
 lib/importar.ts           CSV, OFX, texto de OCR/PDF → lançamentos para revisão
 lib/ocr.ts                OCR e leitura de PDF no navegador

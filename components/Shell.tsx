@@ -23,6 +23,7 @@ import {
   Eye,
   EyeOff,
   SquareKanban,
+  FileText,
 } from "lucide-react";
 import type { Aba } from "@/lib/types";
 import { cx, Botao } from "./ui";
@@ -45,6 +46,7 @@ const VIDA: Item[] = [
   { aba: "faculdade", nome: "Faculdade", icone: GraduationCap },
   { aba: "agenda", nome: "Agenda", icone: CalendarDays },
   { aba: "projetos", nome: "Projetos", icone: SquareKanban },
+  { aba: "conversor", nome: "Conversor", icone: FileText },
 ];
 const AJUSTES: Item = { aba: "ajustes", nome: "Ajustes", icone: Settings2 };
 

@@ -232,4 +232,5 @@ export type Aba =
   | "contasfixas"
   | "importar"
   | "projetos"
+  | "conversor"
   | "ajustes";
